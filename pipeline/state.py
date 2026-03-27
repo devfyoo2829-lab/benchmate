@@ -160,6 +160,8 @@ class EvalState(TypedDict):
     knowledge_scores_final: List[KnowledgeScore] # ab / ba 평균으로 산출한 최종 Knowledge 점수 목록
     agent_scores: List[AgentScore]               # Agent 채점 결과 누적 목록 (코드 채점 + Judge 채점 포함)
     retry_count: int                             # Judge JSON 파싱 실패 시 재시도 카운터. 최대 3회 초과 시 human_review_queue 강제 등록
+    last_failed_branch: Optional[str]            # 파싱 실패가 발생한 브랜치. "knowledge" | "agent" | None
+    _retry_targets: List                         # 재시도 대상 항목 목록 (_parse_failed=True인 score 객체들)
 
     # ── 5. Human Review ───────────────────────────────────────────────────────────
     human_review_queue: List[HumanReviewItem]    # 담당자 검토 큐. flag_human_review 노드가 항목을 추가함
