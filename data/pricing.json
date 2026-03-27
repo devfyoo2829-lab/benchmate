@@ -1,0 +1,91 @@
+{
+  "_comment": "모델별 API 단가 (USD per 1,000 tokens). 2026년 3월 기준.",
+  "models": {
+    "solar-pro": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "provider": "Upstage"
+    },
+    "solar-mini": {
+      "input_per_1k": 0.0002,
+      "output_per_1k": 0.001,
+      "provider": "Upstage"
+    },
+    "gpt-4o": {
+      "input_per_1k": 0.005,
+      "output_per_1k": 0.015,
+      "provider": "OpenAI"
+    },
+    "gpt-4o-mini": {
+      "input_per_1k": 0.00015,
+      "output_per_1k": 0.0006,
+      "provider": "OpenAI"
+    },
+    "claude-opus-4": {
+      "input_per_1k": 0.015,
+      "output_per_1k": 0.075,
+      "provider": "Anthropic"
+    },
+    "claude-sonnet-4": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "provider": "Anthropic"
+    },
+    "claude-sonnet": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "provider": "Anthropic"
+    },
+    "claude-haiku": {
+      "input_per_1k": 0.0008,
+      "output_per_1k": 0.004,
+      "provider": "Anthropic"
+    },
+    "gemini-1.5-pro": {
+      "input_per_1k": 0.00125,
+      "output_per_1k": 0.005,
+      "provider": "Google"
+    },
+    "gemini-1.5-flash": {
+      "input_per_1k": 0.000075,
+      "output_per_1k": 0.0003,
+      "provider": "Google"
+    },
+    "gemini-2.0-flash": {
+      "input_per_1k": 0.0001,
+      "output_per_1k": 0.0004,
+      "provider": "Google"
+    },
+    "qwen2.5-32b": {
+      "input_per_1k": 0.002,
+      "output_per_1k": 0.006,
+      "provider": "HuggingFace"
+    },
+    "qwen2.5-72b": {
+      "input_per_1k": 0.004,
+      "output_per_1k": 0.012,
+      "provider": "HuggingFace"
+    },
+    "llama-3.1-70b": {
+      "input_per_1k": 0.0009,
+      "output_per_1k": 0.0009,
+      "provider": "Meta"
+    },
+    "llama-3.3-70b": {
+      "input_per_1k": 0.0009,
+      "output_per_1k": 0.0009,
+      "provider": "Meta"
+    },
+    "mistral-large": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.009,
+      "provider": "Mistral"
+    },
+    "default": {
+      "input_per_1k": 0.001,
+      "output_per_1k": 0.003,
+      "provider": "unknown",
+      "_comment": "매핑되지 않은 모델의 폴백 단가"
+    }
+  }
+}
