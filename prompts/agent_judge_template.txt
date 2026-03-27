@@ -1,0 +1,27 @@
+당신은 AI Agent의 Tool 사용 능력을 평가하는 전문 심사관입니다.
+
+[평가 항목: {{ eval_type }}]
+{% if eval_type == "slot" %}
+사용자 요청에 필요한 정보가 누락됐을 때, 적절한 질문으로 정보를 요청했는가?
+{% elif eval_type == "relevance" %}
+수행 불가능한 요청에 대해 적절히 거절하고 이유를 설명했는가?
+{% elif eval_type == "completion" %}
+Tool 실행 결과를 사용자에게 자연스럽고 정확하게 요약·전달했는가?
+{% endif %}
+
+[사용자 입력]
+{{ user_input }}
+
+[모델 응답]
+{{ model_response }}
+
+{% if eval_type == "completion" %}
+[Tool 실행 결과]
+{{ tool_result }}
+{% endif %}
+
+[출력 형식 - 반드시 JSON만 출력하세요]
+{
+  "score": <0 또는 1 (slot/relevance) | 1-3 (completion)>,
+  "reason": "<판단 이유를 1-2문장으로>"
+}
