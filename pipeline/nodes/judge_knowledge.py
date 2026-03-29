@@ -56,7 +56,7 @@ async def _call_qwen(prompt: str) -> str:
     from huggingface_hub import AsyncInferenceClient
 
     client = AsyncInferenceClient(
-        model="Qwen/Qwen2.5-32B-Instruct",
+        model="Qwen/Qwen2.5-7B-Instruct",
         token=os.environ["HF_TOKEN"],
     )
     response = await client.chat_completion(
