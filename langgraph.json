@@ -1,0 +1,12 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "benchmate": "./pipeline/graph.py:build_graph"
+  },
+  "env": ".env",
+  "input": {
+    "eval_mode": "knowledge",
+    "domain": "finance",
+    "selected_models": ["solar-pro", "gpt-4o"]
+  }
+}

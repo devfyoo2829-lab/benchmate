@@ -4,7 +4,7 @@ BenchMate — EvalState 중앙 상태 정의
 설계 기준: docs/BenchMate_데이터구조설계.md v1.1
 """
 
-from typing import Dict, List, Literal, Optional, TypedDict
+from typing import Dict, List, Literal, NotRequired, Optional, TypedDict
 
 
 # ── 하위 타입 정의 ──────────────────────────────────────────────────────────────
@@ -146,29 +146,29 @@ class EvalState(TypedDict):
     selected_models: List[str] # 비교 대상 모델 이름 목록. 예: ["solar-pro", "gpt-4o", "claude-sonnet"]
 
     # ── 2. 문항 및 시나리오 (load_scenarios 노드가 채움) ────────────────────────
-    questions: List[QuestionItem]          # Knowledge 평가 문항 목록 (knowledge / integrated 모드)
-    scenarios: List[ScenarioItem]          # Agent 평가 시나리오 목록 (agent / integrated 모드)
-    available_tools: List[ToolDefinition]  # 이번 평가에서 사용할 Tool 정의 목록
-    rubric_text: str                       # 도메인 기본 루브릭 텍스트. Judge 프롬프트에 공통 주입됨
+    questions: NotRequired[List[QuestionItem]]          # Knowledge 평가 문항 목록 (knowledge / integrated 모드)
+    scenarios: NotRequired[List[ScenarioItem]]          # Agent 평가 시나리오 목록 (agent / integrated 모드)
+    available_tools: NotRequired[List[ToolDefinition]]  # 이번 평가에서 사용할 Tool 정의 목록
+    rubric_text: NotRequired[str]                       # 도메인 기본 루브릭 텍스트. Judge 프롬프트에 공통 주입됨
 
     # ── 3. 응답 수집 (generate_responses / generate_tool_calls 노드가 채움) ──────
-    model_responses: List[ModelResponse]   # 전체 모델 응답 누적 목록
+    model_responses: NotRequired[List[ModelResponse]]   # 전체 모델 응답 누적 목록
 
     # ── 4. 채점 결과 ──────────────────────────────────────────────────────────────
-    knowledge_scores_ab: List[KnowledgeScore]    # A→B 순서로 채점한 Knowledge 점수 목록
-    knowledge_scores_ba: List[KnowledgeScore]    # B→A 순서로 채점한 Knowledge 점수 목록 (Position Bias 제거용)
-    knowledge_scores_final: List[KnowledgeScore] # ab / ba 평균으로 산출한 최종 Knowledge 점수 목록
-    agent_scores: List[AgentScore]               # Agent 채점 결과 누적 목록 (코드 채점 + Judge 채점 포함)
-    retry_count: int                             # Judge JSON 파싱 실패 시 재시도 카운터. 최대 3회 초과 시 human_review_queue 강제 등록
-    last_failed_branch: Optional[str]            # 파싱 실패가 발생한 브랜치. "knowledge" | "agent" | None
-    _retry_targets: List                         # 재시도 대상 항목 목록 (_parse_failed=True인 score 객체들)
+    knowledge_scores_ab: NotRequired[List[KnowledgeScore]]    # A→B 순서로 채점한 Knowledge 점수 목록
+    knowledge_scores_ba: NotRequired[List[KnowledgeScore]]    # B→A 순서로 채점한 Knowledge 점수 목록 (Position Bias 제거용)
+    knowledge_scores_final: NotRequired[List[KnowledgeScore]] # ab / ba 평균으로 산출한 최종 Knowledge 점수 목록
+    agent_scores: NotRequired[List[AgentScore]]               # Agent 채점 결과 누적 목록 (코드 채점 + Judge 채점 포함)
+    retry_count: NotRequired[int]                             # Judge JSON 파싱 실패 시 재시도 카운터. 최대 3회 초과 시 human_review_queue 강제 등록
+    last_failed_branch: NotRequired[Optional[str]]            # 파싱 실패가 발생한 브랜치. "knowledge" | "agent" | None
+    _retry_targets: NotRequired[List]                         # 재시도 대상 항목 목록 (_parse_failed=True인 score 객체들)
 
     # ── 5. Human Review ───────────────────────────────────────────────────────────
-    human_review_queue: List[HumanReviewItem]    # 담당자 검토 큐. flag_human_review 노드가 항목을 추가함
-    judge_reliability: Optional[float]           # Judge-Human 일치율 (%). 검토 전: None
+    human_review_queue: NotRequired[List[HumanReviewItem]]    # 담당자 검토 큐. flag_human_review 노드가 항목을 추가함
+    judge_reliability: NotRequired[Optional[float]]           # Judge-Human 일치율 (%). 검토 전: None
 
     # ── 6. 집계 및 출력 (aggregate_results / generate_report 노드가 채움) ─────────
-    summary_table: Optional[Dict]      # 모델 × 도메인 × 기준 집계 테이블. {model: {domain: {criterion: score}}}
-    estimated_cost: Optional[Dict]     # 모델별 추정 API 비용. {model_name: cost_usd}
-    pm_report_text: Optional[str]      # PM 해석 리포트 마크다운 문자열
-    eval_session_id: str               # 세션 고유 ID. 타임스탬프 기반. 예: "eval_20260315_143022"
+    summary_table: NotRequired[Optional[Dict]]      # 모델 × 도메인 × 기준 집계 테이블. {model: {domain: {criterion: score}}}
+    estimated_cost: NotRequired[Optional[Dict]]     # 모델별 추정 API 비용. {model_name: cost_usd}
+    pm_report_text: NotRequired[Optional[str]]      # PM 해석 리포트 마크다운 문자열
+    eval_session_id: NotRequired[str]               # 세션 고유 ID. 타임스탬프 기반. 예: "eval_20260315_143022"
