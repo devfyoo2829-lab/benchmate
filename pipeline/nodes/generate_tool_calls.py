@@ -236,9 +236,9 @@ async def _gather_tool_calls(
 def generate_tool_calls(state: EvalState) -> dict:
     new_responses = asyncio.run(
         _gather_tool_calls(
-            state["selected_models"],
-            state["scenarios"],
-            state["available_tools"],
+            state.get("selected_models", []),
+            state.get("scenarios", []),
+            state.get("available_tools", []),
         )
     )
-    return {"model_responses": state["model_responses"] + new_responses}
+    return {"model_responses": state.get("model_responses", []) + new_responses}

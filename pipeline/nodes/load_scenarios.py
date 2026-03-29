@@ -43,7 +43,7 @@ def _load_text(path: str) -> str:
 
 
 def load_scenarios(state: EvalState) -> dict:
-    domain: str = state["domain"]
+    domain: str = state.get("domain", "finance")
 
     questions_raw = _load_json(
         os.path.join(_ROOT, "data", "questions", f"{domain}.json")

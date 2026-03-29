@@ -138,7 +138,7 @@ async def _run_both_orders(
 
 def judge_knowledge(state: EvalState) -> dict:
     scores_ab, scores_ba = asyncio.run(
-        _run_both_orders(state["questions"], state["model_responses"])
+        _run_both_orders(state.get("questions", []), state.get("model_responses", []))
     )
     return {
         "knowledge_scores_ab": scores_ab,

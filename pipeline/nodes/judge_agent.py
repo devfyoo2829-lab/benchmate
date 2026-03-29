@@ -165,9 +165,9 @@ async def _judge_all(
 def judge_agent(state: EvalState) -> dict:
     updated_scores = asyncio.run(
         _judge_all(
-            state["agent_scores"],
-            state["scenarios"],
-            state["model_responses"],
+            state.get("agent_scores", []),
+            state.get("scenarios", []),
+            state.get("model_responses", []),
         )
     )
     return {"agent_scores": updated_scores}

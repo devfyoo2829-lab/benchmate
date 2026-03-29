@@ -4,9 +4,9 @@
     "benchmate": "./pipeline/graph.py:build_graph"
   },
   "env": ".env",
-  "input": {
+  "defaults": {
     "eval_mode": "knowledge",
     "domain": "finance",
-    "selected_models": ["solar-pro", "gpt-4o"]
+    "selected_models": ["solar-pro"]
   }
 }

@@ -168,6 +168,6 @@ async def _gather_responses(
 
 def generate_responses(state: EvalState) -> dict:
     responses = asyncio.run(
-        _gather_responses(state["selected_models"], state["questions"])
+        _gather_responses(state.get("selected_models", []), state.get("questions", []))
     )
     return {"model_responses": responses}
