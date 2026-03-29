@@ -155,7 +155,7 @@ async def _call_qwen_report(prompt: str) -> str:
     from huggingface_hub import AsyncInferenceClient
 
     client = AsyncInferenceClient(
-        model="Qwen/Qwen2.5-32B-Instruct",
+        model="Qwen/Qwen2.5-7B-Instruct",
         token=os.environ["HF_TOKEN"],
     )
     full_prompt = f"{_REPORT_SYSTEM_PROMPT}\n\n{prompt}"
