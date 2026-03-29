@@ -45,15 +45,33 @@ def _load_text(path: str) -> str:
 def load_scenarios(state: EvalState) -> dict:
     domain: str = state["domain"]
 
-    questions: List[QuestionItem] = _load_json(
+    questions_raw = _load_json(
         os.path.join(_ROOT, "data", "questions", f"{domain}.json")
     )
-    available_tools: List[ToolDefinition] = _load_json(
-        os.path.join(_ROOT, "data", "tools", f"{domain}_tools.json")
+    questions: List[QuestionItem] = (
+        questions_raw.get("questions", []) if isinstance(questions_raw, dict) else questions_raw
     )
-    scenarios: List[ScenarioItem] = _load_json(
-        os.path.join(_ROOT, "data", "scenarios", f"{domain}_scenarios.json")
-    )
+
+    try:
+        tools_raw = _load_json(
+            os.path.join(_ROOT, "data", "tools", f"{domain}_tools.json")
+        )
+        available_tools: List[ToolDefinition] = (
+            tools_raw.get("tools", []) if isinstance(tools_raw, dict) else tools_raw
+        )
+    except FileNotFoundError:
+        available_tools = []
+
+    try:
+        scenarios_raw = _load_json(
+            os.path.join(_ROOT, "data", "scenarios", f"{domain}_scenarios.json")
+        )
+        scenarios: List[ScenarioItem] = (
+            scenarios_raw.get("scenarios", []) if isinstance(scenarios_raw, dict) else scenarios_raw
+        )
+    except FileNotFoundError:
+        scenarios = []
+
     rubric_text: str = _load_text(
         os.path.join(_ROOT, "prompts", "knowledge_judge_template.txt")
     )

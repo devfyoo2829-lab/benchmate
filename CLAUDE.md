@@ -12,12 +12,18 @@ Streamlit UI + LangGraph 파이프라인으로 구동된다.
 - UI: Streamlit (7 Screen)
 - 언어: Python 3.11+
 
+## 환경 설정
+
+- 가상환경 경로: `.venv/` (프로젝트 루트)
+- Python 실행 시 항상 `.venv/bin/python` 사용
+- 패키지 설치: `.venv/bin/pip install ...`
+
 ## 주요 명령어
 
-- 실행: `streamlit run app.py`
-- 테스트: `pytest tests/`
-- 의존성 설치: `pip install -r requirements.txt`
-- 타입 체크: `mypy pipeline/state.py`
+- 실행: `.venv/bin/python -m streamlit run app.py`
+- 테스트: `.venv/bin/python -m pytest tests/`
+- 의존성 설치: `.venv/bin/pip install -r requirements.txt`
+- 타입 체크: `.venv/bin/python -m mypy pipeline/state.py`
 
 ## 폴더 구조
 
