@@ -1,0 +1,36 @@
+{
+  "domain": "finance",
+  "domain_name_ko": "금융",
+  "questions": [
+    {
+      "id": "fin_001",
+      "domain": "finance",
+      "question": "신용대출 금리 산정 시 고려하는 주요 요소 3가지를 설명하시오.",
+      "reference_answer": "신용대출 금리는 기준금리(COFIX), 신용등급, 가산금리의 세 요소로 결정된다. COFIX는 은행의 자금조달 비용을 반영한 기준금리이며, 신용등급이 높을수록 가산금리가 낮아진다. 최종 대출 금리는 기준금리에 가산금리를 더한 값으로 산출된다.",
+      "instance_rubric": "COFIX, 신용등급, 가산금리 세 가지를 모두 언급했는가? 신용등급과 가산금리의 반비례 관계를 명시했는가? 최종 금리 계산 구조(기준금리 + 가산금리)를 설명했는가?",
+      "difficulty": "medium",
+      "task_type": "explanation",
+      "evaluation_focus": ["accuracy", "domain_expertise"]
+    },
+    {
+      "id": "fin_002",
+      "domain": "finance",
+      "question": "원금 5,000만 원, 연이율 4.5%, 대출 기간 24개월 조건에서 원리금균등상환 방식의 월 상환액을 계산하시오.",
+      "reference_answer": "원리금균등상환 월 상환액 공식은 M = P × [r(1+r)^n] / [(1+r)^n - 1]이다. 여기서 P=50,000,000원, r=0.045/12=0.00375, n=24이다. 계산하면 M ≈ 2,181,860원이며, 총 상환액은 약 52,364,640원, 총 이자는 약 2,364,640원이다.",
+      "instance_rubric": "원리금균등상환 공식을 올바르게 적용했는가? 월이율(연이율÷12) 변환을 수행했는가? 최종 월 상환액이 약 218만 원 내외로 정확한가? 총 이자 금액을 함께 제시했는가?",
+      "difficulty": "hard",
+      "task_type": "calculation",
+      "evaluation_focus": ["accuracy", "domain_expertise"]
+    },
+    {
+      "id": "fin_003",
+      "domain": "finance",
+      "question": "DSR(총부채원리금상환비율) 규제가 개인 대출 한도에 미치는 영향을 설명하시오.",
+      "reference_answer": "DSR은 연간 총 부채 원리금 상환액을 연소득으로 나눈 비율이다. 금융당국은 DSR 상한을 설정해(예: 40%) 차주의 연소득 대비 전체 부채 상환 부담을 제한한다. 이 규제로 인해 소득이 낮거나 기존 부채가 많은 차주일수록 신규 대출 한도가 줄어들며, 고소득자와 저소득자 간 대출 접근성 격차가 발생할 수 있다.",
+      "instance_rubric": "DSR의 계산 공식(연간 원리금 ÷ 연소득)을 정확히 설명했는가? DSR 상한 규제가 대출 한도를 제한하는 메커니즘을 설명했는가? 소득 수준에 따른 대출 접근성 차이 등 실질적 영향을 언급했는가?",
+      "difficulty": "medium",
+      "task_type": "explanation",
+      "evaluation_focus": ["accuracy", "domain_expertise", "utility"]
+    }
+  ]
+}

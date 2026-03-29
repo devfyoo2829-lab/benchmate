@@ -1,0 +1,69 @@
+{
+  "domain": "finance",
+  "tools": [
+    {
+      "name": "search_loan_rate",
+      "description": "고객 ID와 신용점수를 입력받아 적용 가능한 대출 금리를 조회합니다.",
+      "parameters": [
+        {
+          "name": "customer_id",
+          "type": "string",
+          "required": true,
+          "description": "고객 고유 식별자. 예: C-1234"
+        },
+        {
+          "name": "credit_score",
+          "type": "integer",
+          "required": true,
+          "description": "신용점수. 300~850 범위. 높을수록 우량 고객"
+        }
+      ],
+      "mock_return": {
+        "customer_id": "C-1234",
+        "credit_score": 720,
+        "credit_grade": "2등급",
+        "base_rate": 3.5,
+        "spread_rate": 1.2,
+        "final_rate": 4.7,
+        "product_name": "일반 신용대출",
+        "max_loan_limit": 50000000,
+        "currency": "KRW"
+      }
+    },
+    {
+      "name": "calculate_interest",
+      "description": "원금, 연이율, 대출 기간을 입력받아 원리금균등상환 방식의 월 상환액과 총 이자를 계산합니다.",
+      "parameters": [
+        {
+          "name": "principal",
+          "type": "integer",
+          "required": true,
+          "description": "대출 원금 (원). 예: 30000000"
+        },
+        {
+          "name": "annual_rate",
+          "type": "float",
+          "required": true,
+          "description": "연이율 (%). 예: 4.7"
+        },
+        {
+          "name": "term_months",
+          "type": "integer",
+          "required": true,
+          "description": "대출 기간 (개월). 예: 36"
+        }
+      ],
+      "mock_return": {
+        "principal": 30000000,
+        "annual_rate": 4.7,
+        "term_months": 36,
+        "monthly_rate": 0.003917,
+        "monthly_payment": 895056,
+        "total_payment": 32222016,
+        "total_interest": 2222016,
+        "repayment_method": "원리금균등상환",
+        "currency": "KRW"
+      }
+    }
+  ]
+}
