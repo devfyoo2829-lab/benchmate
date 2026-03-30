@@ -17,6 +17,9 @@ if screen == 1:
 elif screen == 2:
     from ui.screen2_domain_tool import render
     render()
+elif screen == 3:
+    from ui.screen3_scenario import render
+    render()
 else:
     st.info(f"Screen {screen} — 준비 중입니다.")
     if st.button("← 처음으로"):

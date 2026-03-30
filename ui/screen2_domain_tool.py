@@ -78,6 +78,60 @@ def _build_card_html(domain: dict, selected_key: str | None) -> str:
     """
 
 
+def _render_custom_tool_form() -> None:
+    custom_tools: list[dict] = st.session_state.setdefault("available_tools", [])
+
+    with st.expander("+ 사내 기능 직접 추가", expanded=False):
+        with st.form("custom_tool_form", clear_on_submit=True):
+            name = st.text_input(
+                "기능명 *",
+                placeholder="예: 고객 신용등급 조회",
+            )
+            description = st.text_input(
+                "설명",
+                placeholder="예: 고객 ID를 입력하면 신용등급과 연체 이력을 반환합니다.",
+            )
+            inputs = st.text_area(
+                "입력값",
+                placeholder="예: 고객ID(필수), 조회일자(선택)",
+                height=80,
+            )
+            outputs = st.text_area(
+                "출력값",
+                placeholder="예: 신용등급, 연체이력",
+                height=80,
+            )
+            submitted = st.form_submit_button("추가", type="primary", use_container_width=True)
+
+        if submitted:
+            if not name.strip():
+                st.error("기능명을 입력하세요.")
+            else:
+                custom_tools.append(
+                    {
+                        "name": name.strip(),
+                        "description": description.strip(),
+                        "inputs": inputs.strip(),
+                        "outputs": outputs.strip(),
+                    }
+                )
+                st.session_state["available_tools"] = custom_tools
+                st.success(f"'{name.strip()}' 기능이 추가됐습니다.")
+                st.rerun()
+
+    if custom_tools:
+        st.markdown(f"**직접 추가한 기능 ({len(custom_tools)}개)**")
+        for t in custom_tools:
+            with st.expander(f"**{t['name']}**  —  {t['description']}", expanded=False):
+                if t["inputs"]:
+                    st.markdown(f"**입력값:** {t['inputs']}")
+                if t["outputs"]:
+                    st.markdown(f"**출력값:** {t['outputs']}")
+        if st.button("추가 기능 전체 삭제", key="clear_custom_tools"):
+            st.session_state["available_tools"] = []
+            st.rerun()
+
+
 def _render_tool_table(tools: list[dict]) -> None:
     for tool in tools:
         params = tool.get("parameters", [])
@@ -106,6 +160,17 @@ def _render_tool_table(tools: list[dict]) -> None:
 def render() -> None:
     st.title("BenchMate")
     st.write("평가할 업무 도메인을 선택하세요.")
+
+    st.caption("LLM이 사내 시스템(고객 조회, 금리 계산 등)을 직접 사용하는 능력도 평가합니다.")
+    with st.expander("사내 시스템 연동 기능이란?  자세히 보기 →", expanded=False):
+        st.markdown(
+            """LLM은 단순히 질문에 답하는 것을 넘어, 실제 사내 시스템을 직접 조작할 수 있습니다.
+
+예를 들어 직원이 **'홍길동 고객의 대출 금리 조회해줘'** 라고 말하면
+LLM이 고객 관리 시스템에서 데이터를 직접 가져와 답변합니다.
+
+**BenchMate**는 LLM이 이런 사내 시스템 기능을 정확하게 사용할 수 있는지도 함께 평가합니다."""
+        )
 
     selected: str | None = st.session_state.get("domain_draft")
 
@@ -233,14 +298,29 @@ def render() -> None:
         st.divider()
         st.subheader(f"[{domain_meta['badge']}] {domain_meta['label']} — 등록된 Tool 목록")
 
+        st.info(
+            "아래는 해당 도메인에서 자주 사용하는 사내 시스템 기능 예시입니다.\n\n"
+            "✅ **우리 회사에서 실제로 사용하는 기능이 있다면 추가해주세요.**\n"
+            "예: 사내 CRM에서 고객 정보를 조회하는 기능, ERP에서 재고를 확인하는 기능 등\n\n"
+            "✅ **시스템이 외부에 공개되지 않았거나 자체 구축한 경우에도 괜찮습니다.**\n"
+            "기능 이름과 '어떤 정보를 입력하면 어떤 결과가 나오는지'만 알려주시면 "
+            "BenchMate가 평가용 시나리오를 자동으로 만들어드립니다.\n\n"
+            "작성 예시\n"
+            "- 기능명: 고객 신용등급 조회\n"
+            "- 입력값: 고객 ID, 조회 일자\n"
+            "- 출력값: 신용등급(1~10등급), 연체 이력 여부"
+        )
+
         tools = _load_tools(domain_meta["file"])
         if tools is None:
-            st.info("이 도메인은 현재 준비 중입니다. 곧 Tool 데이터가 추가될 예정입니다.")
+            st.info("이 도메인은 현재 준비 중입니다. 곧 기능 데이터가 추가될 예정입니다.")
         elif len(tools) == 0:
-            st.warning("Tool 파일은 있지만 등록된 Tool이 없습니다.")
+            st.warning("기능 파일은 있지만 등록된 기능이 없습니다.")
         else:
-            st.caption(f"총 {len(tools)}개의 Tool이 등록되어 있습니다.")
+            st.caption(f"총 {len(tools)}개의 기능이 등록되어 있습니다.")
             _render_tool_table(tools)
+
+        _render_custom_tool_form()
 
     st.divider()
 
