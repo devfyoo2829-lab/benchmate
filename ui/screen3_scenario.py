@@ -35,13 +35,23 @@ _KNOWLEDGE_PLACEHOLDERS = {
     "rubric": "예: 2,400만원(연간) 또는 200만원(월) 계산이 정확한가? DSR 40% × 연소득 공식을 사용했는가?",
 }
 
+_KNOWLEDGE_EXAMPLES = {
+    "question": "DSR 40% 규제 적용 시, 연소득 6,000만원인 차주의 월 최대 원리금 상환 가능액은 얼마인가?",
+    "answer": "DSR 40% 기준으로 연소득 6,000만원의 40%인 2,400만원이 연간 상환 가능액이며, 월 기준으로는 200만원이 상한선이다.",
+    "rubric": "2,400만원(연간) 또는 200만원(월) 계산이 정확한가? DSR 40% × 연소득 공식을 사용했는가?",
+}
+
 _AGENT_REQUEST_PLACEHOLDERS: dict[str, str] = {
     "single_A": "예: 홍길동 고객(ID: C-1234)의 신용점수가 720점인데 현재 적용 가능한 대출 금리 조회해줘.",
     "single_B": "예: 이 고객 대출 금리 조회해줘.",
     "single_C": "예: KB국민은행 내부 대출 금리 데이터 조회해줘.",
 }
 
-# tool 이름 → {파라미터명: 예시값}  (number_input의 help=, text_input의 placeholder= 에 사용)
+_AGENT_REQUEST_EXAMPLES: dict[str, str] = {
+    "single_A": "홍길동 고객(ID: C-1234)의 신용점수가 720점인데 현재 적용 가능한 대출 금리 조회해줘.",
+}
+
+# tool 이름 → {파라미터명: 예시값}
 _AGENT_PARAM_EXAMPLES: dict[str, dict[str, Any]] = {
     "search_loan_rate": {
         "customer_id": "C-1234",
@@ -62,42 +72,71 @@ def _load_tools(domain: str) -> list[dict]:
     return data.get("tools", [])
 
 
+def _fill_button(btn_key: str, state_key: str, example: Any) -> None:
+    """우측 정렬 '예시 채우기 →' 버튼. 클릭 시 session_state[state_key] = example.
+    text_area/text_input에 key= 를 쓰지 않으므로 위젯 충돌 없음."""
+    _, col_btn = st.columns([5, 1])
+    with col_btn:
+        if st.button("예시 채우기 →", key=btn_key, use_container_width=False):
+            st.session_state[state_key] = example
+
+
 def _render_knowledge_form() -> None:
     st.subheader("도메인 지식 평가 — 문항 등록")
 
     questions: list[dict[str, Any]] = st.session_state.setdefault("questions", [])
 
-    with st.form("knowledge_question_form", clear_on_submit=True):
-        st.markdown("#### 새 문항 추가")
-        question_text = st.text_area(
-            "질문 *",
-            placeholder=_KNOWLEDGE_PLACEHOLDERS["question"],
-            height=100,
-        )
-        answer_text = st.text_area(
-            "정답 *",
-            placeholder=_KNOWLEDGE_PLACEHOLDERS["answer"],
-            height=100,
-        )
-        rubric_text = st.text_area(
-            "핵심 채점 포인트",
-            placeholder=_KNOWLEDGE_PLACEHOLDERS["rubric"],
-            height=80,
-            help="AI 채점 모델이 이 포인트를 기준으로 채점합니다. 비워두면 정답 기반 일반 채점이 적용됩니다.",
-        )
-        col_diff, col_type = st.columns(2)
-        with col_diff:
-            difficulty = st.selectbox(
-                "난이도", _DIFFICULTY_OPTIONS, index=_KNOWLEDGE_SELECTBOX_DEFAULTS["difficulty_index"]
-            )
-        with col_type:
-            task_type = st.selectbox(
-                "태스크 유형", _TASK_TYPE_OPTIONS, index=_KNOWLEDGE_SELECTBOX_DEFAULTS["task_type_index"]
-            )
+    # draft 상태 초기화
+    st.session_state.setdefault("k_question", "")
+    st.session_state.setdefault("k_answer", "")
+    st.session_state.setdefault("k_rubric", "")
 
-        submitted = st.form_submit_button("문항 추가 +", type="primary", use_container_width=True)
+    st.markdown("#### 새 문항 추가")
 
-    if submitted:
+    # ── 질문 ──────────────────────────────────────────────────────────────────
+    _fill_button("fill_k_question", "k_question", _KNOWLEDGE_EXAMPLES["question"])
+    question_text = st.text_area(
+        "질문 *",
+        value=st.session_state["k_question"],
+        placeholder=_KNOWLEDGE_PLACEHOLDERS["question"],
+        height=100,
+    )
+    st.session_state["k_question"] = question_text
+
+    # ── 정답 ──────────────────────────────────────────────────────────────────
+    _fill_button("fill_k_answer", "k_answer", _KNOWLEDGE_EXAMPLES["answer"])
+    answer_text = st.text_area(
+        "정답 *",
+        value=st.session_state["k_answer"],
+        placeholder=_KNOWLEDGE_PLACEHOLDERS["answer"],
+        height=100,
+    )
+    st.session_state["k_answer"] = answer_text
+
+    # ── 핵심 채점 포인트 ───────────────────────────────────────────────────────
+    _fill_button("fill_k_rubric", "k_rubric", _KNOWLEDGE_EXAMPLES["rubric"])
+    rubric_text = st.text_area(
+        "핵심 채점 포인트",
+        value=st.session_state["k_rubric"],
+        placeholder=_KNOWLEDGE_PLACEHOLDERS["rubric"],
+        height=80,
+        help="AI 채점 모델이 이 포인트를 기준으로 채점합니다. 비워두면 정답 기반 일반 채점이 적용됩니다.",
+    )
+    st.session_state["k_rubric"] = rubric_text
+
+    # ── 난이도 / 태스크 유형 ───────────────────────────────────────────────────
+    col_diff, col_type = st.columns(2)
+    with col_diff:
+        difficulty = st.selectbox(
+            "난이도", _DIFFICULTY_OPTIONS, index=_KNOWLEDGE_SELECTBOX_DEFAULTS["difficulty_index"]
+        )
+    with col_type:
+        task_type = st.selectbox(
+            "태스크 유형", _TASK_TYPE_OPTIONS, index=_KNOWLEDGE_SELECTBOX_DEFAULTS["task_type_index"]
+        )
+
+    # ── 제출 ──────────────────────────────────────────────────────────────────
+    if st.button("문항 추가 +", type="primary", use_container_width=True, key="submit_k"):
         if not question_text.strip():
             st.error("질문을 입력하세요.")
         elif not answer_text.strip():
@@ -114,6 +153,9 @@ def _render_knowledge_form() -> None:
                 }
             )
             st.session_state["questions"] = questions
+            st.session_state["k_question"] = ""
+            st.session_state["k_answer"] = ""
+            st.session_state["k_rubric"] = ""
             st.success(f"문항 {len(questions)}개 등록됨")
             st.rerun()
 
@@ -146,7 +188,7 @@ def _render_param_fields(
     examples: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """파라미터 배열을 받아 type별 입력 위젯을 렌더링하고 {name: value} dict를 반환한다.
-    st.form 내부에서 호출되어야 한다."""
+    key= 없이 value= + session_state 저장 패턴을 사용한다."""
     if examples is None:
         examples = {}
     values: dict[str, Any] = {}
@@ -156,25 +198,50 @@ def _render_param_fields(
         desc: str = p.get("description", "")
         required: bool = p.get("required", False)
         label = f"{name}{' *' if required else ''}"
-        key = f"param_{name}"
+        state_key = f"param_{name}"
+        example = examples.get(name)
 
         if desc:
             st.caption(desc)
 
         if ptype == "integer":
-            example = examples.get(name)
-            help_text = f"예시: {example}" if example is not None else None
-            values[name] = st.number_input(label, step=1, value=0, help=help_text, key=key)
-        elif ptype == "float":
-            example = examples.get(name)
-            help_text = f"예시: {example}" if example is not None else None
-            values[name] = st.number_input(
-                label, step=0.1, value=0.0, format="%.2f", help=help_text, key=key
+            st.session_state.setdefault(state_key, 0)
+            if example is not None:
+                _fill_button(f"fill_param_{name}", state_key, int(example))
+            val = st.number_input(
+                label,
+                step=1,
+                value=int(st.session_state[state_key]),
+                help=f"예시: {example}" if example is not None else None,
             )
-        else:  # string (기본)
-            example = examples.get(name)
-            placeholder = f"예시: {example}" if example is not None else ""
-            values[name] = st.text_input(label, placeholder=placeholder, key=key)
+            st.session_state[state_key] = val
+            values[name] = val
+
+        elif ptype == "float":
+            st.session_state.setdefault(state_key, 0.0)
+            if example is not None:
+                _fill_button(f"fill_param_{name}", state_key, float(example))
+            val = st.number_input(
+                label,
+                step=0.1,
+                value=float(st.session_state[state_key]),
+                format="%.2f",
+                help=f"예시: {example}" if example is not None else None,
+            )
+            st.session_state[state_key] = val
+            values[name] = val
+
+        else:  # string
+            st.session_state.setdefault(state_key, "")
+            if example is not None:
+                _fill_button(f"fill_param_{name}", state_key, str(example))
+            val = st.text_input(
+                label,
+                value=st.session_state[state_key],
+                placeholder=f"예시: {example}" if example is not None else "",
+            )
+            st.session_state[state_key] = val
+            values[name] = val
 
     return values
 
@@ -188,9 +255,11 @@ def _render_agent_form() -> None:
 
     scenarios: list[dict[str, Any]] = st.session_state.setdefault("scenarios", [])
 
+    st.session_state.setdefault("a_user_request", "")
+
     st.markdown("#### 새 시나리오 추가")
 
-    # ── form 밖: 선택 변경 시 즉시 rerun이 필요한 selectbox ──────────────────
+    # ── 시나리오 유형 선택 (즉시 rerun 필요 → key= 사용) ──────────────────────
     scenario_type: str = st.selectbox(
         "시나리오 유형",
         options=_SCENARIO_TYPE_OPTIONS,
@@ -219,31 +288,33 @@ def _render_agent_form() -> None:
             st.warning("선택된 도메인에 등록된 기능이 없습니다. 이전 화면에서 도메인을 확인하세요.")
             correct_tool = st.text_input("정답 기능 이름 (직접 입력)", key="agent_correct_tool_manual")
 
-    # ── form 안: 나머지 입력 필드 + 제출 버튼 ────────────────────────────────
-    request_placeholder = _AGENT_REQUEST_PLACEHOLDERS.get(scenario_type, "")
-    with st.form("agent_scenario_form", clear_on_submit=True):
-        user_request = st.text_area(
-            "사용자 요청 *",
-            placeholder=request_placeholder,
-            height=100,
-            key="agent_user_request",
-        )
+    # ── 사용자 요청 ───────────────────────────────────────────────────────────
+    request_example = _AGENT_REQUEST_EXAMPLES.get(scenario_type)
+    if request_example:
+        _fill_button("fill_a_user_request", "a_user_request", request_example)
 
-        param_values: dict[str, Any] = {}
-        if scenario_type == "single_A" and selected_tool_params:
-            st.markdown("**기대 파라미터**")
-            param_examples = _AGENT_PARAM_EXAMPLES.get(correct_tool, {})
-            param_values = _render_param_fields(selected_tool_params, examples=param_examples)
+    user_request = st.text_area(
+        "사용자 요청 *",
+        value=st.session_state["a_user_request"],
+        placeholder=_AGENT_REQUEST_PLACEHOLDERS.get(scenario_type, ""),
+        height=100,
+    )
+    st.session_state["a_user_request"] = user_request
 
-        submitted = st.form_submit_button("시나리오 추가 +", type="primary", use_container_width=True)
+    # ── 기대 파라미터 (유형 A일 때만) ─────────────────────────────────────────
+    param_values: dict[str, Any] = {}
+    if scenario_type == "single_A" and selected_tool_params:
+        st.markdown("**기대 파라미터**")
+        param_examples = _AGENT_PARAM_EXAMPLES.get(correct_tool, {})
+        param_values = _render_param_fields(selected_tool_params, examples=param_examples)
 
-    if submitted:
+    # ── 제출 ──────────────────────────────────────────────────────────────────
+    if st.button("시나리오 추가 +", type="primary", use_container_width=True, key="submit_a"):
         if not user_request.strip():
             st.error("사용자 요청을 입력하세요.")
         elif scenario_type == "single_A" and not correct_tool:
             st.error("유형 A 시나리오에는 정답 기능을 선택하세요.")
         else:
-            # 필수 파라미터 누락 검사
             missing = [
                 p["name"]
                 for p in selected_tool_params
@@ -263,6 +334,9 @@ def _render_agent_form() -> None:
                     }
                 )
                 st.session_state["scenarios"] = scenarios
+                st.session_state["a_user_request"] = ""
+                for p in selected_tool_params:
+                    st.session_state[f"param_{p['name']}"] = 0 if p["type"] in ("integer", "float") else ""
                 st.success(f"시나리오 {len(scenarios)}개 등록됨")
                 st.rerun()
 
@@ -304,10 +378,8 @@ def render() -> None:
 
     if eval_mode == "knowledge":
         _render_knowledge_form()
-
     elif eval_mode == "agent":
         _render_agent_form()
-
     else:  # integrated
         tab_k, tab_a = st.tabs(["도메인 지식 평가", "업무 자동화 능력 평가"])
         with tab_k:
@@ -320,7 +392,6 @@ def render() -> None:
     questions: list = st.session_state.get("questions", [])
     scenarios: list = st.session_state.get("scenarios", [])
 
-    # 다음 버튼 활성화 조건 확인
     can_proceed = False
     if eval_mode == "knowledge" and questions:
         can_proceed = True
