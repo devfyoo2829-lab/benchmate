@@ -26,6 +26,9 @@ elif screen == 4:
 elif screen == 5:
     from ui.screen5_dashboard import render
     render()
+elif screen == 6:
+    from ui.screen6_human_review import render
+    render()
 else:
     st.info(f"Screen {screen} — 준비 중입니다.")
     if st.button("← 처음으로"):
