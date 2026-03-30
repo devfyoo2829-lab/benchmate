@@ -5,16 +5,17 @@ BenchMate — Screen 4: 모델 선택 + 파이프라인 실행
 import streamlit as st
 
 from pipeline.graph import build_graph
+from pipeline.nodes._hf_error import JudgeError
 
 # ── 모델 메타데이터 ────────────────────────────────────────────────────────────
 
 _MODELS = [
-    {"key": "solar-pro",     "label": "Solar Pro",     "provider": "Upstage",       "available": True},
-    {"key": "gpt-4o",        "label": "GPT-4o",        "provider": "OpenAI",         "available": True},
-    {"key": "claude-sonnet", "label": "Claude Sonnet", "provider": "Anthropic",      "available": True},
-    {"key": "hyperclovax",   "label": "HyperCLOVA X",  "provider": "NAVER",          "available": False},
-    {"key": "exaone",        "label": "EXAONE",        "provider": "LG AI Research", "available": False},
+    {"key": "solar-pro",     "label": "Solar Pro",     "provider": "Upstage"},
+    {"key": "gpt-4o",        "label": "GPT-4o",        "provider": "OpenAI"},
+    {"key": "claude-sonnet", "label": "Claude Sonnet", "provider": "Anthropic"},
 ]
+
+_MODEL_BY_KEY: dict[str, dict] = {m["key"]: m for m in _MODELS}
 
 # ── 노드명 → 한국어 진행 메시지 ────────────────────────────────────────────────
 
@@ -37,41 +38,22 @@ _NODE_LABELS: dict[str, str] = {
 
 def _render_model_selector() -> None:
     st.subheader("비교할 모델을 선택하세요")
-    st.caption("최소 1개 이상 선택하세요. '준비 중' 모델은 현재 평가에 포함되지 않습니다.")
+    st.caption("최소 1개 이상 선택하세요.")
 
-    selected: list[str] = st.session_state.setdefault("selected_models", [])
+    model_keys = [m["key"] for m in _MODELS]
+    model_labels = {m["key"]: f"{m['label']} ({m['provider']})" for m in _MODELS}
 
-    available_models = [m for m in _MODELS if m["available"]]
-    unavailable_models = [m for m in _MODELS if not m["available"]]
+    current = st.session_state.get("selected_models", [])
 
-    cols = st.columns(len(_MODELS))
+    selected = st.multiselect(
+        "평가 모델",
+        options=model_keys,
+        default=[k for k in current if k in model_keys],
+        format_func=lambda k: model_labels[k],
+        label_visibility="collapsed",
+    )
 
-    for i, model in enumerate(available_models):
-        with cols[i]:
-            checked = model["key"] in selected
-            new_checked = st.checkbox(
-                model["label"],
-                value=checked,
-                key=f"model_chk_{model['key']}",
-            )
-            if new_checked != checked:
-                if new_checked:
-                    selected.append(model["key"])
-                else:
-                    selected.remove(model["key"])
-                st.session_state["selected_models"] = selected
-                st.rerun()
-
-    for i, model in enumerate(unavailable_models):
-        col_idx = len(available_models) + i
-        with cols[col_idx]:
-            st.checkbox(
-                model["label"],
-                value=False,
-                disabled=True,
-                key=f"model_chk_{model['key']}",
-            )
-            st.caption("준비 중")
+    st.session_state["selected_models"] = selected
 
 
 def _render_selected_cards() -> None:
@@ -79,11 +61,11 @@ def _render_selected_cards() -> None:
     if not selected_keys:
         return
 
-    selected_meta = [m for m in _MODELS if m["key"] in selected_keys]
     st.markdown("#### 선택된 모델")
 
-    cols = st.columns(len(selected_meta))
-    for col, model in zip(cols, selected_meta):
+    cols = st.columns(len(selected_keys))
+    for col, key in zip(cols, selected_keys):
+        model = _MODEL_BY_KEY[key]
         with col:
             st.markdown(
                 f"""
@@ -105,55 +87,66 @@ def _render_selected_cards() -> None:
 # ── 파이프라인 실행 ────────────────────────────────────────────────────────────
 
 def _build_initial_state() -> dict:
-    return {
+    state: dict = {
         "eval_mode":       st.session_state.get("eval_mode", "knowledge"),
         "domain":          st.session_state.get("domain", "finance"),
         "selected_models": st.session_state.get("selected_models", []),
     }
 
+    for key in ("questions", "scenarios", "available_tools"):
+        value = st.session_state.get(key)
+        if value is not None:
+            state[key] = value
+
+    return state
+
 
 def _run_pipeline() -> None:
-    graph = build_graph()
-    initial_state = _build_initial_state()
+    try:
+        graph = build_graph()
+        initial_state = _build_initial_state()
 
-    selected_models: list[str] = initial_state["selected_models"]
-    model_labels = [
-        m["label"] for m in _MODELS if m["key"] in selected_models
-    ]
+        selected_models: list[str] = initial_state["selected_models"]
+        model_labels = [
+            _MODEL_BY_KEY[k]["label"] for k in selected_models if k in _MODEL_BY_KEY
+        ]
 
-    with st.spinner("파이프라인 실행 중..."):
-        with st.status("평가를 진행하고 있습니다.", expanded=True) as status:
-            final_state: dict = {}
+        with st.spinner("파이프라인 실행 중..."):
+            with st.status("평가를 진행하고 있습니다.", expanded=True) as status:
+                node_outputs: dict = {}
 
-            for step in graph.stream(initial_state):  # type: ignore[arg-type]
-                node_name = next(iter(step))
-                node_output = step[node_name]
+                for step in graph.stream(initial_state):  # type: ignore[arg-type]
+                    node_name = next(iter(step))
+                    node_output = step[node_name]
 
-                if node_name in final_state:
-                    final_state[node_name].update(node_output)
-                else:
-                    final_state[node_name] = node_output
+                    node_outputs[node_name] = node_output
 
-                label = _NODE_LABELS.get(node_name, f"{node_name} 처리 중...")
+                    label = _NODE_LABELS.get(node_name, f"{node_name} 처리 중...")
 
-                # 응답 수집 단계: 선택 모델 이름도 함께 표시
-                if node_name in ("generate_responses", "generate_tool_calls") and model_labels:
-                    models_str = ", ".join(model_labels)
-                    label = f"{models_str} 응답 수집 중..."
+                    if node_name in ("generate_responses", "generate_tool_calls") and model_labels:
+                        label = f"{', '.join(model_labels)} 응답 수집 중..."
 
-                st.write(f"✓ {label}")
+                    st.write(f"✓ {label}")
 
-            status.update(label="평가 완료!", state="complete", expanded=False)
+                status.update(label="평가 완료!", state="complete", expanded=False)
 
-    # 최종 집계 state 복원 (stream은 노드별 출력만 반환하므로 병합)
-    merged: dict = dict(initial_state)
-    for node_output in final_state.values():
-        if isinstance(node_output, dict):
-            merged.update(node_output)
+        merged: dict = dict(initial_state)
+        for node_output in node_outputs.values():
+            if isinstance(node_output, dict):
+                merged.update(node_output)
 
-    st.session_state["eval_result"] = merged
-    st.session_state["current_screen"] = 5
-    st.rerun()
+        st.session_state["eval_result"] = merged
+        st.session_state["current_screen"] = 5
+        st.rerun()
+
+    except JudgeError as exc:
+        st.warning(
+            f"채점 모델 연결에 문제가 발생했습니다.\n\n"
+            f"**원인:** {exc}\n\n"
+            "모델 응답 수집은 완료됐으니 크레딧 충전 후 다시 시도하시면 됩니다."
+        )
+    except Exception as exc:
+        st.warning(f"평가 실행 중 오류가 발생했습니다: {exc}")
 
 
 # ── render ─────────────────────────────────────────────────────────────────────

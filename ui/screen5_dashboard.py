@@ -13,10 +13,16 @@ import plotly.graph_objects as go
 _KNOWLEDGE_AXES = [
     "사실 정확도",
     "한국어 자연성",
-    "잘못된 정보\n생성 여부",
+    "허위 정보 없음",
     "도메인 전문성",
     "응답 적절성",
 ]
+
+_MODEL_DISPLAY_NAMES: dict[str, str] = {
+    "solar-pro":     "Solar Pro",
+    "gpt-4o":        "GPT-4o",
+    "claude-sonnet": "Claude Sonnet",
+}
 
 _KNOWLEDGE_KEYS = ["accuracy", "fluency", "hallucination", "domain_expertise", "utility"]
 
@@ -149,14 +155,14 @@ def _render_metric_cards(eval_result: dict, model_stats: dict[str, dict]) -> Non
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.metric("평가 모델 수", f"{len(model_stats)}개")
+        st.metric(label="평가 모델 수", value=f"{len(model_stats)}개")
 
     with c2:
         reliability = eval_result.get("judge_reliability")
         if reliability is not None:
-            st.metric("Judge 신뢰도", f"{reliability:.1f}%")
+            st.metric(label="채점 신뢰도", value=f"{reliability:.1f}%")
         else:
-            st.metric("Judge 신뢰도", "측정 전")
+            st.metric(label="채점 신뢰도", value="측정 전")
 
     with c3:
         cost_dict: dict | None = eval_result.get("estimated_cost")
@@ -164,9 +170,9 @@ def _render_metric_cards(eval_result: dict, model_stats: dict[str, dict]) -> Non
             total_cost = cost_dict.get("_total") or sum(
                 v for k, v in cost_dict.items() if k != "_total" and isinstance(v, (int, float))
             )
-            st.metric("총 평가 비용", f"${total_cost:.4f}")
+            st.metric(label="총 평가 비용", value=f"${total_cost:.4f}")
         else:
-            st.metric("총 평가 비용", "—")
+            st.metric(label="총 평가 비용", value="—")
 
 
 # ── 산점도 ────────────────────────────────────────────────────────────────────
@@ -200,6 +206,37 @@ def _render_scatter(model_stats: dict[str, dict]) -> None:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+
+# ── Knowledge 총점 바 차트 ─────────────────────────────────────────────────────
+
+def _render_knowledge_bar(model_stats: dict[str, dict]) -> None:
+    st.subheader("도메인 지식 평가 결과 (25점 만점)")
+
+    fig = go.Figure()
+
+    models = list(model_stats.keys())
+    display_names = [_MODEL_DISPLAY_NAMES.get(m, m) for m in models]
+    totals = [model_stats[m]["knowledge_total"] for m in models]
+    colors = [_MODEL_COLORS[i % len(_MODEL_COLORS)] for i in range(len(models))]
+
+    fig.add_trace(go.Bar(
+        x=display_names,
+        y=totals,
+        marker_color=colors,
+        text=[f"{v:.1f}" for v in totals],
+        textposition="outside",
+    ))
+
+    fig.update_layout(
+        yaxis=dict(title="Knowledge 총점 (0~25)", range=[0, 28]),
+        height=380,
+        margin=dict(l=40, r=40, t=40, b=40),
+        showlegend=False,
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("점수가 높을수록 도메인 지식과 답변 품질이 우수합니다.")
 
 
 # ── 레이더 차트 ───────────────────────────────────────────────────────────────
@@ -300,8 +337,13 @@ def render() -> None:
     _render_metric_cards(eval_result, model_stats)
     st.divider()
 
-    # ── 산점도 ─────────────────────────────────────────────────────────────────
-    _render_scatter(model_stats)
+    eval_mode: str = eval_result.get("eval_mode", "knowledge")
+
+    # ── 산점도 or Knowledge 총점 바 차트 ───────────────────────────────────────
+    if eval_mode == "knowledge":
+        _render_knowledge_bar(model_stats)
+    else:
+        _render_scatter(model_stats)
     st.divider()
 
     # ── 레이더 + Agent 바 ──────────────────────────────────────────────────────
@@ -309,7 +351,10 @@ def render() -> None:
     with col_left:
         _render_radar(model_stats)
     with col_right:
-        _render_agent_bar(model_stats)
+        if eval_mode == "knowledge":
+            st.info("Agent 평가는 '업무 자동화 능력 평가' 또는 '종합 평가' 모드에서 확인할 수 있습니다.")
+        else:
+            _render_agent_bar(model_stats)
 
     st.divider()
 

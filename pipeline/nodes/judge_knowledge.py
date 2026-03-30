@@ -15,6 +15,7 @@ from typing import List
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from pipeline.nodes._hf_error import translate_hf_error
 from pipeline.state import EvalState, KnowledgeScore, ModelResponse, QuestionItem
 
 load_dotenv()
@@ -59,12 +60,16 @@ async def _call_qwen(prompt: str) -> str:
         model="Qwen/Qwen2.5-7B-Instruct",
         token=os.environ["HF_TOKEN"],
     )
-    response = await client.chat_completion(
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_tokens=512,
-    )
-    return response.choices[0].message.content or ""
+    try:
+        response = await client.chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=512,
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e:
+        mapped = translate_hf_error(e)
+        raise (mapped or e) from e
 
 
 async def _judge_single(

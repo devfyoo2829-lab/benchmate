@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 
+from pipeline.nodes._hf_error import translate_hf_error
 from pipeline.state import EvalState
 
 load_dotenv()
@@ -159,12 +160,16 @@ async def _call_qwen_report(prompt: str) -> str:
         token=os.environ["HF_TOKEN"],
     )
     full_prompt = f"{_REPORT_SYSTEM_PROMPT}\n\n{prompt}"
-    response = await client.chat_completion(
-        messages=[{"role": "user", "content": full_prompt}],
-        temperature=0.3,
-        max_tokens=2048,
-    )
-    return response.choices[0].message.content or ""
+    try:
+        response = await client.chat_completion(
+            messages=[{"role": "user", "content": full_prompt}],
+            temperature=0.3,
+            max_tokens=2048,
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e:
+        mapped = translate_hf_error(e)
+        raise (mapped or e) from e
 
 
 async def _generate_report_text(prompt: str) -> str:
