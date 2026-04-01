@@ -5,5 +5,7 @@ openai
 anthropic
 python-dotenv
 jinja2
+nest_asyncio
+reportlab
 pytest
 mypy

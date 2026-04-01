@@ -1,6 +1,7 @@
 """
 BenchMate — Screen 6: Human Review
-담당자가 Judge 채점 결과를 검토·수정하는 인터페이스.
+담당자가 AI 채점 결과를 검토·수정하는 인터페이스.
+같은 question_id/scenario_id에 대해 여러 모델이 등록된 경우 문항 기준으로 그룹핑 표시.
 """
 
 from __future__ import annotations
@@ -17,45 +18,94 @@ _KNOWLEDGE_FIELDS: list[tuple[str, str]] = [
     ("utility",          "응답 적절성"),
 ]
 
+# 내부 review_reason 값 → 사용자 친화적 표현
+_REASON_LABELS: dict[str, str] = {
+    "Judge JSON 파싱 3회 실패":    "AI 채점 오류 발생 항목",
+    "hallucination 점수 낮음":     "허위 정보 생성 가능성이 감지된 항목",
+    "랜덤 품질 샘플":              "AI 채점 품질 확인용 무작위 선정 항목",
+    "교차 편차":                   "AI 채점 간 점수 차이가 큰 항목",
+    "Tool 호출 실패":              "AI가 도구 호출에 실패한 항목",
+}
+
+
+def _reason_label(reason: str) -> str:
+    """review_reason을 사용자 친화적 문구로 변환한다."""
+    for key, label in _REASON_LABELS.items():
+        if key in reason:
+            return label
+    return reason or "검토 대상 항목"
+
 
 # ── judge_reliability 계산 ────────────────────────────────────────────────────
 
 def _calc_judge_reliability(queue: list[dict]) -> float:
     """
-    Human Review가 완료된 항목들에 대해 Judge-Human 일치율(%)을 계산한다.
-    Knowledge: 5개 항목 각각 일치 여부를 비교.
-    Agent: call_score 일치 여부를 비교.
+    Human Review가 완료된 항목들의 AI-담당자 일치율(%)을 계산한다.
+    Knowledge: judge_score["total"] vs sum(human_score 5개 축)
+               |차이| <= 2 이면 일치.
+    Agent: call_score 일치 여부.
     """
-    total = 0
-    matched = 0
-
-    for item in queue:
-        if not item.get("is_reviewed"):
-            continue
-        human_score: dict | None = item.get("human_score")
-        judge_score: dict = item.get("judge_score", {})
-        if not human_score:
-            continue
-
-        if item.get("item_type") == "knowledge":
-            for key, _ in _KNOWLEDGE_FIELDS:
-                human_val = human_score.get(key)
-                judge_val = judge_score.get(key)
-                if human_val is not None and judge_val is not None:
-                    total += 1
-                    if human_val == judge_val:
-                        matched += 1
-        else:  # agent
-            human_call = human_score.get("call_score")
-            judge_call = judge_score.get("call_score")
-            if human_call is not None and judge_call is not None:
-                total += 1
-                if human_call == judge_call:
-                    matched += 1
-
-    if total == 0:
+    reviewed = [r for r in queue if r.get("is_reviewed") and r.get("human_score")]
+    if not reviewed:
         return 100.0
-    return (matched / total) * 100.0
+
+    agreed = 0
+    for r in reviewed:
+        j = r.get("judge_score", {})
+        h = r.get("human_score", {})
+        item_type = r.get("item_type", "knowledge")
+
+        if item_type == "knowledge":
+            j_total = j.get("total", 0) or 0
+            h_total = sum([
+                h.get("accuracy") or 0,
+                h.get("fluency") or 0,
+                h.get("hallucination") or 0,
+                h.get("domain_expertise") or 0,
+                h.get("utility") or 0,
+            ])
+        else:
+            j_total = j.get("call_score") or 0
+            h_total = h.get("call_score") or 0
+
+        if abs(j_total - h_total) <= 2:
+            agreed += 1
+
+    return round((agreed / len(reviewed)) * 100, 1)
+
+
+def _update_reliability(updated_queue: list[dict]) -> None:
+    """검토 완료 항목 기준으로 judge_reliability를 즉시 계산·저장한다."""
+    if "eval_result" not in st.session_state:
+        return
+
+    reliability = _calc_judge_reliability(updated_queue)
+
+    result = dict(st.session_state["eval_result"])
+    result["judge_reliability"] = reliability
+    result["human_review_queue"] = updated_queue
+    st.session_state["eval_result"] = result
+    st.session_state["judge_reliability"] = reliability
+
+
+# ── 모델 응답 / 루브릭 조회 ──────────────────────────────────────────────────
+
+def _find_response_text(eval_result: dict, item_id: str, model_name: str) -> str:
+    """eval_result["model_responses"]에서 item_id + model_name에 맞는 response_text를 반환."""
+    for record in (eval_result or {}).get("model_responses") or []:
+        rid = record.get("question_id") or record.get("scenario_id") or record.get("item_id", "")
+        if rid == item_id and record.get("model_name") == model_name:
+            return record.get("response_text") or record.get("response") or ""
+    return ""
+
+
+def _find_instance_rubric(eval_result: dict, item_id: str) -> str:
+    """eval_result["questions"]에서 item_id와 일치하는 instance_rubric을 반환."""
+    for record in (eval_result or {}).get("questions") or []:
+        qid = record.get("question_id") or record.get("id") or record.get("item_id", "")
+        if qid == item_id:
+            return record.get("instance_rubric") or ""
+    return ""
 
 
 # ── 빈 상태 화면 ──────────────────────────────────────────────────────────────
@@ -75,15 +125,10 @@ def _render_empty_state() -> None:
 
 # ── Knowledge 항목 폼 ─────────────────────────────────────────────────────────
 
-def _render_knowledge_form(idx: int, item: dict) -> dict | None:
-    """
-    Knowledge 항목의 수정 폼을 렌더링한다.
-    '검토 완료' 클릭 시 HumanScoreDetail dict 반환, 아니면 None.
-    """
+def _render_knowledge_form(form_key: str, item: dict) -> dict | None:
     judge_score: dict = item.get("judge_score", {})
 
-    st.markdown("**Judge 채점 결과**")
-
+    st.markdown("**AI 채점 결과**")
     cols = st.columns(len(_KNOWLEDGE_FIELDS))
     for col, (key, label) in zip(cols, _KNOWLEDGE_FIELDS):
         with col:
@@ -91,7 +136,7 @@ def _render_knowledge_form(idx: int, item: dict) -> dict | None:
 
     reason = judge_score.get("reason", "")
     if reason:
-        st.caption(f"Judge 채점 이유: {reason}")
+        st.caption(f"AI 채점 이유: {reason}")
 
     st.markdown("**담당자 수정 점수**")
     new_scores: dict[str, int] = {}
@@ -104,10 +149,10 @@ def _render_knowledge_form(idx: int, item: dict) -> dict | None:
                 min_value=1,
                 max_value=5,
                 value=default_val,
-                key=f"s6_slider_{idx}_{key}",
+                key=f"s6_slider_{form_key}_{key}",
             )
 
-    if st.button("검토 완료", key=f"s6_submit_{idx}", type="primary"):
+    if st.button("검토 완료", key=f"s6_submit_{form_key}", type="primary"):
         return {
             "accuracy":         new_scores["accuracy"],
             "fluency":          new_scores["fluency"],
@@ -121,30 +166,27 @@ def _render_knowledge_form(idx: int, item: dict) -> dict | None:
 
 # ── Agent 항목 폼 ─────────────────────────────────────────────────────────────
 
-def _render_agent_form(idx: int, item: dict) -> dict | None:
-    """
-    Agent 항목의 수정 폼을 렌더링한다.
-    '검토 완료' 클릭 시 HumanScoreDetail dict 반환, 아니면 None.
-    """
+def _render_agent_form(form_key: str, item: dict) -> dict | None:
     judge_score: dict = item.get("judge_score", {})
     judge_call = judge_score.get("call_score", "—")
 
-    st.metric(label="Judge call_score", value=str(judge_call))
+    st.metric(label="도구 호출 정확도 (AI 채점)", value=str(judge_call))
 
     reason = judge_score.get("reason", "")
     if reason:
-        st.caption(f"채점 이유: {reason}")
+        st.caption(f"AI 채점 이유: {reason}")
 
     default_idx = 0 if judge_call != 1 else 1
     human_call = st.radio(
-        "담당자 수정 call_score",
+        "담당자 판단 (0: 틀림 / 1: 맞음)",
         options=[0, 1],
+        format_func=lambda x: "0 (AI가 잘못 호출함)" if x == 0 else "1 (AI가 올바르게 호출함)",
         index=default_idx,
         horizontal=True,
-        key=f"s6_radio_{idx}",
+        key=f"s6_radio_{form_key}",
     )
 
-    if st.button("검토 완료", key=f"s6_submit_{idx}", type="primary"):
+    if st.button("검토 완료", key=f"s6_submit_{form_key}", type="primary"):
         return {
             "accuracy":         None,
             "fluency":          None,
@@ -156,12 +198,90 @@ def _render_agent_form(idx: int, item: dict) -> dict | None:
     return None
 
 
+# ── 그룹 단위 렌더 ────────────────────────────────────────────────────────────
+
+def _render_group(
+    group_idx: int,
+    item_id: str,
+    group: list[dict],
+    queue: list[dict],
+) -> None:
+    """같은 item_id를 공유하는 항목들을 하나의 expander 안에서 표시한다."""
+    all_reviewed = all(item.get("is_reviewed") for item in group)
+    item_type = group[0].get("item_type", "knowledge")
+    label = f"{'✅' if all_reviewed else '⬜'} [{group_idx + 1}] {item_id}"
+
+    eval_result: dict = st.session_state.get("eval_result") or {}
+
+    with st.expander(label, expanded=not all_reviewed):
+        # 문항 루브릭 (item_id 공통) 표시
+        rubric = _find_instance_rubric(eval_result, item_id)
+        if rubric:
+            st.caption(f"채점 기준: {rubric}")
+
+        for item in group:
+            model_name: str = item.get("model_name", "unknown")
+            review_reason: str = item.get("review_reason", "")
+            is_reviewed: bool = item.get("is_reviewed", False)
+
+            st.markdown(
+                f"**모델: `{model_name}`** — "
+                f"검토 사유: {_reason_label(review_reason)}"
+            )
+
+            # 모델 응답 표시
+            response_text = _find_response_text(eval_result, item_id, model_name)
+            if response_text:
+                st.text_area(
+                    "모델 응답",
+                    value=response_text,
+                    height=300,
+                    disabled=True,
+                    key=f"s6_resp_{group_idx}_{model_name}",
+                )
+
+            if is_reviewed:
+                st.success("검토 완료")
+                human_score = item.get("human_score") or {}
+                if item_type == "knowledge":
+                    score_cols = st.columns(len(_KNOWLEDGE_FIELDS))
+                    for col, (key, label_txt) in zip(score_cols, _KNOWLEDGE_FIELDS):
+                        with col:
+                            st.metric(label=label_txt, value=human_score.get(key, "—"))
+                else:
+                    st.metric(
+                        label="담당자 판단 call_score",
+                        value=str(human_score.get("call_score", "—")),
+                    )
+            else:
+                form_key = f"{group_idx}_{model_name}"
+                if item_type == "knowledge":
+                    result = _render_knowledge_form(form_key, item)
+                else:
+                    result = _render_agent_form(form_key, item)
+
+                if result is not None:
+                    item["human_score"] = result
+                    item["is_reviewed"] = True
+                    _update_reliability(queue)
+                    st.rerun()
+
+            st.markdown("---")
+
+
 # ── render ────────────────────────────────────────────────────────────────────
 
 def render() -> None:
     st.title("BenchMate")
-    st.write("Human Review — 채점 결과 검토 및 수정")
+    st.write("Human Review — AI 채점 결과 검토 및 수정")
     st.divider()
+
+    st.info(
+        "AI가 채점한 결과를 담당자가 직접 검토하는 단계입니다.\n\n"
+        "AI 채점이 적절했는지 확인하고, 점수가 잘못됐다고 판단되면 수정해주세요.\n\n"
+        "검토를 완료하면 'AI 채점 신뢰도'가 자동으로 계산됩니다.\n\n"
+        "모든 항목 검토 후 다음 단계로 넘어가세요."
+    )
 
     eval_result: dict | None = st.session_state.get("eval_result")
     queue: list[dict] = (eval_result or {}).get("human_review_queue") or []
@@ -175,62 +295,26 @@ def render() -> None:
     st.caption(f"검토 진행: {reviewed_count} / {total_count}")
     st.progress(reviewed_count / total_count if total_count else 0)
 
-    # ── 모든 항목 검토 완료 시 신뢰도 표시 ──────────────────────────────────
-    if reviewed_count == total_count:
-        reliability: float = eval_result.get("judge_reliability") or _calc_judge_reliability(queue)
-        st.success(f"채점 신뢰도: {reliability:.1f}% 로 측정됐습니다.")
+    # ── 검토 완료된 항목이 있으면 신뢰도 표시 ────────────────────────────────
+    saved_reliability = st.session_state.get("judge_reliability")
+    if saved_reliability is not None:
+        label_txt = (
+            "전체 검토 완료 — AI 채점 신뢰도"
+            if reviewed_count == total_count
+            else "현재까지 AI 채점 신뢰도"
+        )
+        st.success(f"{label_txt}: {saved_reliability:.1f}%")
 
     st.divider()
 
-    # ── 항목별 카드 ───────────────────────────────────────────────────────────
-    for idx, item in enumerate(queue):
-        item_id: str = item.get("item_id", f"item_{idx}")
-        model_name: str = item.get("model_name", "unknown")
-        item_type: str = item.get("item_type", "knowledge")
-        review_reason: str = item.get("review_reason", "")
-        is_reviewed: bool = item.get("is_reviewed", False)
+    # ── item_id 기준으로 그룹핑 (순서 유지) ──────────────────────────────────
+    groups: dict[str, list[dict]] = {}
+    for item in queue:
+        item_id = item.get("item_id", "")
+        groups.setdefault(item_id, []).append(item)
 
-        with st.expander(
-            f"{'✅' if is_reviewed else '⬜'} [{idx + 1}] {item_id} — {model_name}",
-            expanded=not is_reviewed,
-        ):
-            col_meta1, col_meta2, col_meta3 = st.columns(3)
-            with col_meta1:
-                st.markdown(f"**항목 ID** `{item_id}`")
-            with col_meta2:
-                st.markdown(f"**모델** `{model_name}`")
-            with col_meta3:
-                st.markdown(f"**등록 사유** {review_reason}")
-
-            if is_reviewed:
-                st.success("검토 완료")
-                human_score = item.get("human_score") or {}
-                if item_type == "knowledge":
-                    score_cols = st.columns(len(_KNOWLEDGE_FIELDS))
-                    for col, (key, label) in zip(score_cols, _KNOWLEDGE_FIELDS):
-                        with col:
-                            st.metric(label=label, value=human_score.get(key, "—"))
-                else:
-                    st.metric(label="수정 call_score", value=str(human_score.get("call_score", "—")))
-            else:
-                if item_type == "knowledge":
-                    human_score_result = _render_knowledge_form(idx, item)
-                else:
-                    human_score_result = _render_agent_form(idx, item)
-
-                if human_score_result is not None:
-                    # 인플레이스 업데이트 (eval_result 내 queue 변경)
-                    item["human_score"] = human_score_result
-                    item["is_reviewed"] = True
-
-                    # 마지막 항목이었으면 즉시 judge_reliability 계산·저장
-                    all_done = all(q.get("is_reviewed") for q in queue)
-                    if all_done and eval_result is not None:
-                        eval_result["judge_reliability"] = _calc_judge_reliability(queue)
-
-                    if eval_result is not None:
-                        st.session_state["eval_result"] = eval_result
-                    st.rerun()
+    for group_idx, (item_id, group) in enumerate(groups.items()):
+        _render_group(group_idx, item_id, group, queue)
 
     st.divider()
 

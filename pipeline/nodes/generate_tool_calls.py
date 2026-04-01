@@ -14,6 +14,7 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 
+from pipeline.nodes._async_utils import run_async
 from pipeline.state import EvalState, ModelResponse, ScenarioItem, ToolDefinition
 
 load_dotenv()
@@ -234,7 +235,7 @@ async def _gather_tool_calls(
 
 
 def generate_tool_calls(state: EvalState) -> dict:
-    new_responses = asyncio.run(
+    new_responses = run_async(
         _gather_tool_calls(
             state.get("selected_models", []),
             state.get("scenarios", []),

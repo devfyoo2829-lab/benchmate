@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from pipeline.nodes._async_utils import run_async
 from pipeline.nodes._hf_error import translate_hf_error
 from pipeline.state import AgentScore, EvalState, ModelResponse, ScenarioItem
 
@@ -168,7 +169,7 @@ async def _judge_all(
 
 
 def judge_agent(state: EvalState) -> dict:
-    updated_scores = asyncio.run(
+    updated_scores = run_async(
         _judge_all(
             state.get("agent_scores", []),
             state.get("scenarios", []),

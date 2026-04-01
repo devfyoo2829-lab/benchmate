@@ -15,6 +15,7 @@ from typing import List
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from pipeline.nodes._async_utils import run_async
 from pipeline.nodes._hf_error import translate_hf_error
 from pipeline.state import EvalState, KnowledgeScore, ModelResponse, QuestionItem
 
@@ -142,7 +143,7 @@ async def _run_both_orders(
 
 
 def judge_knowledge(state: EvalState) -> dict:
-    scores_ab, scores_ba = asyncio.run(
+    scores_ab, scores_ba = run_async(
         _run_both_orders(state.get("questions", []), state.get("model_responses", []))
     )
     return {

@@ -11,6 +11,7 @@ from typing import List
 
 from dotenv import load_dotenv
 
+from pipeline.nodes._async_utils import run_async
 from pipeline.state import EvalState, ModelResponse, QuestionItem
 
 load_dotenv()
@@ -175,7 +176,7 @@ async def _gather_responses(
 
 
 def generate_responses(state: EvalState) -> dict:
-    responses = asyncio.run(
+    responses = run_async(
         _gather_responses(state.get("selected_models", []), state.get("questions", []))
     )
     return {"model_responses": responses}

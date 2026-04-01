@@ -5,148 +5,16 @@ BenchMate — Screen 5: 결과 대시보드
 from __future__ import annotations
 
 import streamlit as st
-import plotly.graph_objects as go
 
-
-# ── 상수 ──────────────────────────────────────────────────────────────────────
-
-_KNOWLEDGE_AXES = [
-    "사실 정확도",
-    "한국어 자연성",
-    "허위 정보 없음",
-    "도메인 전문성",
-    "응답 적절성",
-]
-
-_MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "solar-pro":     "Solar Pro",
-    "gpt-4o":        "GPT-4o",
-    "claude-sonnet": "Claude Sonnet",
-}
-
-_KNOWLEDGE_KEYS = ["accuracy", "fluency", "hallucination", "domain_expertise", "utility"]
-
-_AGENT_ITEMS = ["call", "slot", "relevance", "completion"]
-_AGENT_LABELS = {
-    "call":       "Tool 호출 정확도",
-    "slot":       "슬롯 요청 적절성",
-    "relevance":  "거절 적절성",
-    "completion": "결과 전달 품질",
-}
-
-_MODEL_COLORS = [
-    "#4F8EF7",  # blue
-    "#F7844F",  # orange
-    "#4FD1C5",  # teal
-    "#F7C94F",  # yellow
-    "#A78BFA",  # purple
-]
-
-
-# ── 데이터 추출 헬퍼 ──────────────────────────────────────────────────────────
-
-def _extract_model_stats(eval_result: dict) -> dict[str, dict]:
-    """
-    summary_table 또는 raw 점수 목록에서 모델별 통계를 추출한다.
-    반환: {model_name: {knowledge_total, knowledge_axes, agent_scores}}
-    """
-    summary_table: dict | None = eval_result.get("summary_table")
-    stats: dict[str, dict] = {}
-
-    if summary_table:
-        for model_name, domains in summary_table.items():
-            # 도메인 전체 평균
-            k_totals: list[float] = []
-            k_axes: dict[str, list[float]] = {k: [] for k in _KNOWLEDGE_KEYS}
-            a_scores: dict[str, list[float]] = {k: [] for k in _AGENT_ITEMS}
-
-            for domain_data in domains.values():
-                if isinstance(domain_data, dict):
-                    # Knowledge 점수
-                    for key in _KNOWLEDGE_KEYS:
-                        val = domain_data.get(key)
-                        if val is not None:
-                            k_axes[key].append(float(val))
-                    total = domain_data.get("total") or domain_data.get("knowledge_total")
-                    if total is not None:
-                        k_totals.append(float(total))
-                    # Agent 점수
-                    for key in _AGENT_ITEMS:
-                        val = domain_data.get(f"{key}_score")
-                        if val is not None:
-                            a_scores[key].append(float(val))
-
-            stats[model_name] = {
-                "knowledge_total": (sum(k_totals) / len(k_totals)) if k_totals else 0.0,
-                "knowledge_axes": {
-                    k: (sum(v) / len(v)) if v else 0.0 for k, v in k_axes.items()
-                },
-                "agent_scores": {
-                    k: (sum(v) / len(v)) if v else 0.0 for k, v in a_scores.items()
-                },
-            }
-        return stats
-
-    # summary_table 없을 때 — knowledge_scores_final 과 agent_scores 에서 직접 집계
-    k_final: list[dict] = eval_result.get("knowledge_scores_final") or []
-    a_raw: list[dict] = eval_result.get("agent_scores") or []
-
-    for record in k_final:
-        model = record.get("model_name", "unknown")
-        if model not in stats:
-            stats[model] = {
-                "knowledge_total": 0.0,
-                "knowledge_axes": {k: 0.0 for k in _KNOWLEDGE_KEYS},
-                "agent_scores": {k: 0.0 for k in _AGENT_ITEMS},
-                "_k_counts": 0,
-                "_k_axes_acc": {k: [] for k in _KNOWLEDGE_KEYS},
-            }
-        for key in _KNOWLEDGE_KEYS:
-            stats[model]["_k_axes_acc"][key].append(float(record.get(key, 0)))
-        stats[model]["_k_counts"] += 1
-
-    for model, data in stats.items():
-        counts = data.pop("_k_counts", 0)
-        acc = data.pop("_k_axes_acc", {})
-        if counts:
-            data["knowledge_total"] = sum(
-                sum(v) / len(v) for v in acc.values() if v
-            )
-            data["knowledge_axes"] = {
-                k: (sum(v) / len(v)) if v else 0.0 for k, v in acc.items()
-            }
-
-    for record in a_raw:
-        model = record.get("model_name", "unknown")
-        if model not in stats:
-            stats[model] = {
-                "knowledge_total": 0.0,
-                "knowledge_axes": {k: 0.0 for k in _KNOWLEDGE_KEYS},
-                "agent_scores": {k: 0.0 for k in _AGENT_ITEMS},
-            }
-        for key in _AGENT_ITEMS:
-            field = f"{key}_score"
-            val = record.get(field)
-            if val is not None:
-                prev = stats[model]["agent_scores"].get(key, [])
-                if not isinstance(prev, list):
-                    prev = [prev] if prev else []
-                prev.append(float(val))
-                stats[model]["agent_scores"][key] = prev
-
-    # 리스트 → 평균
-    for model in stats:
-        for key in _AGENT_ITEMS:
-            val = stats[model]["agent_scores"].get(key, 0.0)
-            if isinstance(val, list):
-                stats[model]["agent_scores"][key] = (sum(val) / len(val)) if val else 0.0
-
-    return stats
-
-
-def _agent_call_avg(agent_scores: dict[str, float]) -> float:
-    """call_score 평균 (0~1)."""
-    return agent_scores.get("call", 0.0)
+from ui.charts import (
+    extract_model_stats,
+    has_knowledge_data,
+    has_agent_data,
+    build_scatter_fig,
+    build_knowledge_bar_fig,
+    build_radar_fig,
+    build_agent_bar_fig,
+)
 
 
 # ── 지표 카드 ─────────────────────────────────────────────────────────────────
@@ -158,11 +26,23 @@ def _render_metric_cards(eval_result: dict, model_stats: dict[str, dict]) -> Non
         st.metric(label="평가 모델 수", value=f"{len(model_stats)}개")
 
     with c2:
-        reliability = eval_result.get("judge_reliability")
+        # session_state 우선, 없으면 eval_result 폴백
+        reliability = (
+            st.session_state.get("judge_reliability")
+            or st.session_state.get("eval_result", {}).get("judge_reliability")
+        )
         if reliability is not None:
-            st.metric(label="채점 신뢰도", value=f"{reliability:.1f}%")
+            st.metric(
+                label="채점 신뢰도",
+                value=f"{reliability:.1f}%",
+                help="Human Review 완료 후 최신 수치로 갱신됩니다.",
+            )
         else:
-            st.metric(label="채점 신뢰도", value="측정 전")
+            st.metric(
+                label="채점 신뢰도",
+                value="Human Review 후 측정",
+                help="Human Review 화면에서 AI 채점을 검토하면 자동으로 계산됩니다.",
+            )
 
     with c3:
         cost_dict: dict | None = eval_result.get("estimated_cost")
@@ -173,136 +53,6 @@ def _render_metric_cards(eval_result: dict, model_stats: dict[str, dict]) -> Non
             st.metric(label="총 평가 비용", value=f"${total_cost:.4f}")
         else:
             st.metric(label="총 평가 비용", value="—")
-
-
-# ── 산점도 ────────────────────────────────────────────────────────────────────
-
-def _render_scatter(model_stats: dict[str, dict]) -> None:
-    st.subheader("Knowledge vs Agent 비교")
-
-    fig = go.Figure()
-
-    for i, (model, data) in enumerate(model_stats.items()):
-        color = _MODEL_COLORS[i % len(_MODEL_COLORS)]
-        x = data["knowledge_total"]           # 0~25
-        y = _agent_call_avg(data["agent_scores"])  # 0~1
-
-        fig.add_trace(go.Scatter(
-            x=[x],
-            y=[y],
-            mode="markers+text",
-            name=model,
-            text=[model],
-            textposition="top center",
-            marker=dict(size=18, color=color, line=dict(width=1.5, color="white")),
-        ))
-
-    fig.update_layout(
-        xaxis=dict(title="Knowledge 총점 (0~25)", range=[-1, 26]),
-        yaxis=dict(title="Agent call_score 평균 (0~1)", range=[-0.05, 1.1]),
-        height=420,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=40, r=40, t=40, b=40),
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
-# ── Knowledge 총점 바 차트 ─────────────────────────────────────────────────────
-
-def _render_knowledge_bar(model_stats: dict[str, dict]) -> None:
-    st.subheader("도메인 지식 평가 결과 (25점 만점)")
-
-    fig = go.Figure()
-
-    models = list(model_stats.keys())
-    display_names = [_MODEL_DISPLAY_NAMES.get(m, m) for m in models]
-    totals = [model_stats[m]["knowledge_total"] for m in models]
-    colors = [_MODEL_COLORS[i % len(_MODEL_COLORS)] for i in range(len(models))]
-
-    fig.add_trace(go.Bar(
-        x=display_names,
-        y=totals,
-        marker_color=colors,
-        text=[f"{v:.1f}" for v in totals],
-        textposition="outside",
-    ))
-
-    fig.update_layout(
-        yaxis=dict(title="Knowledge 총점 (0~25)", range=[0, 28]),
-        height=380,
-        margin=dict(l=40, r=40, t=40, b=40),
-        showlegend=False,
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("점수가 높을수록 도메인 지식과 답변 품질이 우수합니다.")
-
-
-# ── 레이더 차트 ───────────────────────────────────────────────────────────────
-
-def _render_radar(model_stats: dict[str, dict]) -> None:
-    st.subheader("Knowledge 세부 항목 비교")
-
-    fig = go.Figure()
-
-    for i, (model, data) in enumerate(model_stats.items()):
-        color = _MODEL_COLORS[i % len(_MODEL_COLORS)]
-        axes = data["knowledge_axes"]
-        values = [axes.get(k, 0.0) for k in _KNOWLEDGE_KEYS]
-        values_closed = values + [values[0]]  # 닫힌 다각형
-
-        fig.add_trace(go.Scatterpolar(
-            r=values_closed,
-            theta=_KNOWLEDGE_AXES + [_KNOWLEDGE_AXES[0]],
-            fill="toself",
-            name=model,
-            line=dict(color=color),
-            fillcolor=color,
-            opacity=0.25,
-        ))
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 5]),
-        ),
-        height=420,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=40, r=40, t=40, b=40),
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
-# ── Agent 바 차트 ─────────────────────────────────────────────────────────────
-
-def _render_agent_bar(model_stats: dict[str, dict]) -> None:
-    st.subheader("Agent 항목별 비교")
-
-    fig = go.Figure()
-
-    for i, (model, data) in enumerate(model_stats.items()):
-        color = _MODEL_COLORS[i % len(_MODEL_COLORS)]
-        a_scores = data["agent_scores"]
-        y_vals = [a_scores.get(k, 0.0) for k in _AGENT_ITEMS]
-        x_labels = [_AGENT_LABELS[k] for k in _AGENT_ITEMS]
-
-        fig.add_trace(go.Bar(
-            name=model,
-            x=x_labels,
-            y=y_vals,
-            marker_color=color,
-        ))
-
-    fig.update_layout(
-        barmode="group",
-        yaxis=dict(title="점수", range=[0, 1.1]),
-        height=380,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=40, r=40, t=40, b=40),
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
 
 
 # ── 빈 결과 화면 ──────────────────────────────────────────────────────────────
@@ -327,7 +77,7 @@ def render() -> None:
         _render_empty_state()
         return
 
-    model_stats = _extract_model_stats(eval_result)
+    model_stats = extract_model_stats(eval_result)
 
     if not model_stats:
         _render_empty_state()
@@ -337,24 +87,53 @@ def render() -> None:
     _render_metric_cards(eval_result, model_stats)
     st.divider()
 
-    eval_mode: str = eval_result.get("eval_mode", "knowledge")
+    eval_mode = st.session_state.get("eval_mode", "")
+    has_k = has_knowledge_data(model_stats)
+    has_a = has_agent_data(model_stats, eval_result, eval_mode)
 
-    # ── 산점도 or Knowledge 총점 바 차트 ───────────────────────────────────────
-    if eval_mode == "knowledge":
-        _render_knowledge_bar(model_stats)
-    else:
-        _render_scatter(model_stats)
+    # ── 상단 주요 차트: 데이터 조합에 따라 결정 ──────────────────────────────
+    if has_k and has_a:
+        st.subheader("Knowledge vs Agent 비교")
+        st.plotly_chart(build_scatter_fig(model_stats), use_container_width=True)
+    elif has_k:
+        st.subheader("도메인 지식 평가 결과 (25점 만점)")
+        st.plotly_chart(build_knowledge_bar_fig(model_stats), use_container_width=True)
+        st.caption("점수가 높을수록 도메인 지식과 답변 품질이 우수합니다.")
+    elif has_a:
+        st.info("Knowledge 평가 데이터가 없습니다. Agent 결과만 표시합니다.")
     st.divider()
 
     # ── 레이더 + Agent 바 ──────────────────────────────────────────────────────
-    col_left, col_right = st.columns(2)
-    with col_left:
-        _render_radar(model_stats)
-    with col_right:
-        if eval_mode == "knowledge":
-            st.info("Agent 평가는 '업무 자동화 능력 평가' 또는 '종합 평가' 모드에서 확인할 수 있습니다.")
-        else:
-            _render_agent_bar(model_stats)
+    if has_a:
+        col_left, col_right = st.columns(2)
+        with col_left:
+            if has_k:
+                st.subheader("Knowledge 세부 항목 비교")
+                radar_fig = build_radar_fig(model_stats)
+                if radar_fig:
+                    st.plotly_chart(radar_fig, use_container_width=True)
+                else:
+                    st.info("Knowledge 세부 항목 데이터가 없습니다.")
+            else:
+                st.info("Knowledge 세부 항목 데이터가 없습니다.")
+        with col_right:
+            st.subheader("Agent 항목별 비교")
+            agent_fig = build_agent_bar_fig(model_stats)
+            if agent_fig:
+                st.plotly_chart(agent_fig, use_container_width=True)
+            else:
+                st.info("Agent 평가 데이터가 없습니다.")
+    else:
+        if has_k:
+            st.subheader("Knowledge 세부 항목 비교")
+            radar_fig = build_radar_fig(model_stats)
+            if radar_fig:
+                st.plotly_chart(radar_fig, use_container_width=True)
+            else:
+                st.info("Knowledge 세부 항목 데이터가 없습니다.")
+        st.caption(
+            "업무 자동화 능력 평가 또는 종합 평가 모드에서 Agent 차트를 확인할 수 있습니다."
+        )
 
     st.divider()
 
