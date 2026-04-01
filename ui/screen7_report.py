@@ -453,21 +453,21 @@ def _build_mckinsey_pdf(
                     marker_color=bar_colors,
                     text=[str(s) for s in scores_k],
                     textposition="outside",
-                    textfont=dict(size=9, color="#1A1A1A"),
+                    textfont=dict(size=6, color="#1A1A1A"),
                 ))
                 bar_fig.update_layout(
                     plot_bgcolor="white", paper_bgcolor="white",
                     margin=dict(l=60, r=40, t=10, b=10),
                     xaxis=dict(range=[0, 25], showgrid=True, gridcolor="#eeeeee",
-                               tickfont=dict(size=9)),
-                    yaxis=dict(showgrid=False, tickfont=dict(size=9)),
-                    font=dict(family="Arial", size=9),
+                               tickfont=dict(size=6)),
+                    yaxis=dict(showgrid=False, tickfont=dict(size=6)),
+                    font=dict(family="Arial", size=6),
                     showlegend=False,
                 )
-                p = _fig_to_tmp(bar_fig, 460, 160, scale=2)
+                p = _fig_to_tmp(bar_fig, 390, 95, scale=2)
                 if p:
                     elems += [
-                        Image(p, width=content_w, height=content_w * 160 / 460),
+                        Image(p, width=content_w, height=content_w * 95 / 390),
                         Spacer(1, 2),
                         Paragraph("Knowledge 총점 비교 (25점 만점)", s_caption),
                         Spacer(1, 4),

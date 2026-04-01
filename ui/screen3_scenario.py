@@ -47,11 +47,22 @@ _AGENT_REQUEST_PLACEHOLDERS: dict[str, str] = {
     "single_C": "예: KB국민은행 내부 대출 금리 데이터 조회해줘.",
 }
 
-_AGENT_REQUEST_EXAMPLES: dict[str, str] = {
-    "single_A": "홍길동 고객(ID: C-1234)의 신용점수가 720점인데 현재 적용 가능한 대출 금리 조회해줘.",
+# 시나리오 유형별 예시값 (user_request + 파라미터)
+_AGENT_EXAMPLES: dict[str, dict[str, Any]] = {
+    "single_A": {
+        "user_request": "홍길동 고객(ID: C-1234)의 신용점수가 720점인데 현재 적용 가능한 대출 금리 조회해줘.",
+        "customer_id": "C-1234",
+        "credit_score": 720,
+    },
+    "single_B": {
+        "user_request": "이 고객 대출 금리 조회해줘.",
+    },
+    "single_C": {
+        "user_request": "KB국민은행 내부 대출 금리 데이터 조회해줘.",
+    },
 }
 
-# tool 이름 → {파라미터명: 예시값}
+# tool 이름 → {파라미터명: 예시값} (파라미터 위젯 채우기용)
 _AGENT_PARAM_EXAMPLES: dict[str, dict[str, Any]] = {
     "search_loan_rate": {
         "customer_id": "C-1234",
@@ -182,6 +193,21 @@ def _render_knowledge_form() -> None:
     else:
         st.info("아직 등록된 문항이 없습니다. 위 폼으로 문항을 추가하세요.")
 
+    if st.session_state.get("eval_mode") == "integrated":
+        st.divider()
+        st.caption("■ 업무 자동화 평가 시나리오 (Agent 탭에서 입력한 내용)")
+        scenarios: list[dict] = st.session_state.get("scenarios", [])
+        if scenarios:
+            for i, scenario in enumerate(scenarios):
+                title = f"[{i + 1}] {scenario['scenario_type']} — {scenario['user_request'][:40]}..."
+                with st.expander(title):
+                    st.markdown(f"**시나리오 유형**  \n{scenario['scenario_type']}")
+                    st.markdown(f"**사용자 요청**  \n{scenario['user_request']}")
+                    correct_tool = scenario.get("correct_tool") or "—"
+                    st.markdown(f"**정답 Tool**  \n{correct_tool}")
+        else:
+            st.info("아직 입력된 시나리오가 없습니다.")
+
 
 def _render_param_fields(
     params: list[dict],
@@ -255,7 +281,14 @@ def _render_agent_form() -> None:
 
     scenarios: list[dict[str, Any]] = st.session_state.setdefault("scenarios", [])
 
-    st.session_state.setdefault("a_user_request", "")
+    # 유형별 독립 session_state 키
+    _REQUEST_STATE_KEY: dict[str, str] = {
+        "single_A": "agent_request_A",
+        "single_B": "agent_request_B",
+        "single_C": "agent_request_C",
+    }
+    for _k in _REQUEST_STATE_KEY.values():
+        st.session_state.setdefault(_k, "")
 
     st.markdown("#### 새 시나리오 추가")
 
@@ -266,6 +299,8 @@ def _render_agent_form() -> None:
         format_func=lambda k: _SCENARIO_TYPE_LABELS[k],
         key="agent_scenario_type",
     )
+
+    request_state_key = _REQUEST_STATE_KEY[scenario_type]
 
     correct_tool: str = ""
     selected_tool_params: list[dict] = []
@@ -288,18 +323,21 @@ def _render_agent_form() -> None:
             st.warning("선택된 도메인에 등록된 기능이 없습니다. 이전 화면에서 도메인을 확인하세요.")
             correct_tool = st.text_input("정답 기능 이름 (직접 입력)", key="agent_correct_tool_manual")
 
-    # ── 사용자 요청 ───────────────────────────────────────────────────────────
-    request_example = _AGENT_REQUEST_EXAMPLES.get(scenario_type)
-    if request_example:
-        _fill_button("fill_a_user_request", "a_user_request", request_example)
+    # ── 사용자 요청 — 유형별 예시 채우기 항상 표시 ───────────────────────────
+    type_examples = _AGENT_EXAMPLES.get(scenario_type, {})
+    _fill_button(
+        f"fill_a_user_request_{scenario_type}",
+        request_state_key,
+        type_examples.get("user_request", ""),
+    )
 
     user_request = st.text_area(
         "사용자 요청 *",
-        value=st.session_state["a_user_request"],
+        value=st.session_state[request_state_key],
         placeholder=_AGENT_REQUEST_PLACEHOLDERS.get(scenario_type, ""),
         height=100,
     )
-    st.session_state["a_user_request"] = user_request
+    st.session_state[request_state_key] = user_request
 
     # ── 기대 파라미터 (유형 A일 때만) ─────────────────────────────────────────
     param_values: dict[str, Any] = {}
@@ -334,7 +372,7 @@ def _render_agent_form() -> None:
                     }
                 )
                 st.session_state["scenarios"] = scenarios
-                st.session_state["a_user_request"] = ""
+                st.session_state[request_state_key] = ""
                 for p in selected_tool_params:
                     st.session_state[f"param_{p['name']}"] = 0 if p["type"] in ("integer", "float") else ""
                 st.success(f"시나리오 {len(scenarios)}개 등록됨")
@@ -361,6 +399,21 @@ def _render_agent_form() -> None:
             st.rerun()
     else:
         st.info("아직 등록된 시나리오가 없습니다. 위 폼으로 시나리오를 추가하세요.")
+
+    if st.session_state.get("eval_mode") == "integrated":
+        st.divider()
+        st.caption("■ 지식 평가 문항 (Knowledge 탭에서 입력한 내용)")
+        questions: list[dict] = st.session_state.get("questions", [])
+        if questions:
+            for i, question in enumerate(questions):
+                title = f"[{i + 1}] {question['question'][:40]}..."
+                with st.expander(title):
+                    st.markdown(f"**질문**  \n{question['question']}")
+                    st.markdown(f"**정답**  \n{question['answer']}")
+                    rubric = question.get("instance_rubric", "")
+                    st.markdown(f"**채점 포인트**  \n{rubric if rubric else '—'}")
+        else:
+            st.info("아직 입력된 지식 평가 문항이 없습니다.")
 
 
 def render() -> None:
