@@ -335,4 +335,11 @@ def generate_report(state: EvalState) -> dict:
     prompt = _build_report_prompt(state)
     report_text = run_async(_generate_report_text(prompt))
     _save_session_json(state, report_text)
+
+    try:
+        from db.supabase_client import save_eval_session
+        save_eval_session({**state, "pm_report_text": report_text})
+    except Exception as e:
+        print(f"[Supabase] 저장 실패 (파이프라인 계속 진행): {e}")
+
     return {"pm_report_text": report_text}

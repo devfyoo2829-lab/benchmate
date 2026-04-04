@@ -276,8 +276,15 @@ def _render_agent_form() -> None:
     st.subheader("업무 자동화 능력 평가 — 시나리오 등록")
 
     domain: str | None = st.session_state.get("domain")
-    tools = _load_tools(domain) if domain else []
+    file_tools = _load_tools(domain) if domain else []
+    session_tools: list[dict] = st.session_state.get("available_tools", [])
+    # 파일 Tool 우선, 사용자 추가 Tool 중 중복 이름 제외 후 병합
+    file_tool_names = {t["name"] for t in file_tools}
+    extra_tools = [t for t in session_tools if t["name"] not in file_tool_names]
+    tools = file_tools + extra_tools
     tool_names = [t["name"] for t in tools]
+    if not tool_names:
+        tool_names = ["search_loan_rate", "calculate_interest"]  # 폴백
 
     scenarios: list[dict[str, Any]] = st.session_state.setdefault("scenarios", [])
 

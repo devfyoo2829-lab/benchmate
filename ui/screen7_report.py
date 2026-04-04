@@ -200,8 +200,8 @@ def _build_mckinsey_pdf(
     s_sec_hd   = _stb("sechd",   fontSize=8, leading=11, textColor=BLACK)
     s_sec_hd_w = _stb("sechd_w", fontSize=8, leading=11, textColor=WHITE)
 
-    # 표 — 헤더 7.5pt 볼드 흰색 / 본문 7.5pt
-    s_th    = _stb("th",   fontSize=7.5, leading=10, textColor=WHITE,      alignment=1)
+    # 표 — 헤더 6.5pt 볼드 흰색 / 본문 7.5pt
+    s_th    = _stb("th",   fontSize=6.5, leading=10, textColor=WHITE,      alignment=1)
     s_td    = _st("td",    fontSize=7.5, leading=10, textColor=DARK_GRAY)
     s_td_c  = _st("tdc",   fontSize=7.5, leading=10, textColor=DARK_GRAY,  alignment=1)
     s_td_hi = _stb("tdhi", fontSize=7.5, leading=10, textColor=BLACK)
@@ -209,7 +209,8 @@ def _build_mckinsey_pdf(
 
     # 기타
     s_insight  = _st("insight",  fontSize=7.5, leading=10, textColor=DARK_GRAY)
-    s_bullet   = _st("bullet",   fontSize=7.5, leading=9,  textColor=DARK_GRAY, leftIndent=6)
+    s_bullet   = _st("bullet",   fontSize=7.5, leading=11, textColor=DARK_GRAY,
+                      leftIndent=12, firstLineIndent=-12, spaceBefore=2, spaceAfter=2)
     s_caption  = _st("caption",  fontSize=6.5, leading=9,  textColor=MEDIUM_GRAY, alignment=1)
     s_footer   = _st("footer",   fontSize=6,   leading=9,  textColor=MEDIUM_GRAY, alignment=1)
     s_legend   = _st("legend",   fontSize=6.5, leading=9,  textColor=MEDIUM_GRAY)
@@ -309,8 +310,9 @@ def _build_mckinsey_pdf(
         best_score       = 0.0
         best_score_model = "—"
         for m, d in model_stats.items():
-            if d.get("has_knowledge") and d["knowledge_total"] > best_score:
-                best_score       = d["knowledge_total"]
+            kt = d["knowledge_total"] or 0.0
+            if d.get("has_knowledge") and kt > best_score:
+                best_score       = kt
                 best_score_model = MODEL_DISPLAY_NAMES.get(m, m)
 
         if has_k and best_score > 0:
@@ -411,15 +413,19 @@ def _build_mckinsey_pdf(
                                             tickfont=dict(size=7)),
                             angularaxis=dict(tickfont=dict(size=8)),
                         ),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                    xanchor="right", x=1, font=dict(size=8)),
+                        legend=dict(
+                            orientation="v",
+                            x=1.05, y=1.0,
+                            xanchor="left", yanchor="top",
+                            font=dict(size=8),
+                        ),
                         font=dict(size=8),
-                        margin=dict(l=40, r=40, t=30, b=20),
+                        margin=dict(l=20, r=120, t=20, b=20),
                     )
-                    p = _fig_to_tmp(radar_fig, 380, 220, scale=2)
+                    p = _fig_to_tmp(radar_fig, 380, 180, scale=2)
                     if p:
                         radar_w = content_w * 380 / 460
-                        radar_h = radar_w * 220 / 380
+                        radar_h = radar_w * 180 / 380
                         radar_img = Image(p, width=radar_w, height=radar_h, hAlign="CENTER")
                         radar_tbl = Table([[radar_img]], colWidths=[content_w])
                         radar_tbl.setStyle(TableStyle([
@@ -431,7 +437,7 @@ def _build_mckinsey_pdf(
                             colWidths=[content_w],
                         )
                         cap_tbl.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-                        elems += [radar_tbl, Spacer(1, 2), cap_tbl, Spacer(1, 4)]
+                        elems += [Spacer(1, 4), radar_tbl, Spacer(1, 2), cap_tbl, Spacer(1, 4)]
         except Exception as e:
             st.warning(f"PDF 레이더 차트 생성 오류: {e}")
 
@@ -453,21 +459,21 @@ def _build_mckinsey_pdf(
                     marker_color=bar_colors,
                     text=[str(s) for s in scores_k],
                     textposition="outside",
-                    textfont=dict(size=6, color="#1A1A1A"),
+                    textfont=dict(size=5, color="#1A1A1A"),
                 ))
                 bar_fig.update_layout(
                     plot_bgcolor="white", paper_bgcolor="white",
                     margin=dict(l=60, r=40, t=10, b=10),
                     xaxis=dict(range=[0, 25], showgrid=True, gridcolor="#eeeeee",
-                               tickfont=dict(size=6)),
-                    yaxis=dict(showgrid=False, tickfont=dict(size=6)),
-                    font=dict(family="Arial", size=6),
+                               tickfont=dict(size=5)),
+                    yaxis=dict(showgrid=False, tickfont=dict(size=5)),
+                    font=dict(family="Arial", size=5),
                     showlegend=False,
                 )
-                p = _fig_to_tmp(bar_fig, 390, 95, scale=2)
+                p = _fig_to_tmp(bar_fig, 371, 90, scale=2)
                 if p:
                     elems += [
-                        Image(p, width=content_w, height=content_w * 95 / 390),
+                        Image(p, width=content_w, height=content_w * 90 / 371),
                         Spacer(1, 2),
                         Paragraph("Knowledge 총점 비교 (25점 만점)", s_caption),
                         Spacer(1, 4),
@@ -514,12 +520,11 @@ def _build_mckinsey_pdf(
 
         def _bullet_cell(items: list[str]) -> list:
             cell: list = []
-            for item in (items or ["—"])[:2]:
-                txt = item[:65] + ("…" if len(item) > 65 else "")
-                cell.append(Paragraph(f"• {txt}", s_bullet))
+            for item in (items or ["—"])[:3]:
+                cell.append(Paragraph(f"• {item}", s_bullet))
             return cell
 
-        cw_half = content_w / 2 - 3
+        cw_half = content_w / 2
         findings_tbl = Table(
             [
                 [Paragraph("■ 강점 분석", s_sec_hd_w),
@@ -527,6 +532,7 @@ def _build_mckinsey_pdf(
                 [_bullet_cell(strengths), _bullet_cell(risks)],
             ],
             colWidths=[cw_half, cw_half],
+            minRowHeights=[16, 80],
         )
         findings_tbl.setStyle(TableStyle([
             ("BACKGROUND",    (0, 0), (0, 0),   ACCENT_BLUE),
@@ -541,7 +547,7 @@ def _build_mckinsey_pdf(
             ("BOX",           (0, 0), (0, 1),   0.5, BORDER_GRAY),
             ("BOX",           (1, 0), (1, 1),   0.5, BORDER_GRAY),
         ]))
-        elems += [findings_tbl, Spacer(1, 4)]
+        elems += [findings_tbl, Spacer(1, 2)]
     except Exception as e:
         st.warning(f"PDF 강점/리스크 섹션 생성 오류: {e}")
 
@@ -554,24 +560,39 @@ def _build_mckinsey_pdf(
         _agent_tbl_hdrs = ["Tool호출", "슬롯", "거절", "완료"]
         col_hdrs = ["모델"]
         if has_k:
-            col_hdrs += ["지식총점(/25)", "사실정확도", "허위정보없음", "도메인전문성"]
+            col_hdrs += ["지식총점", "정확도", "허위정보", "전문성"]
         if has_a:
             col_hdrs += _agent_tbl_hdrs
         if cost_dict:
-            col_hdrs += ["비용(USD)", "비용(KRW)"]
+            col_hdrs += ["USD", "KRW"]
 
-        n_cols   = len(col_hdrs)
-        cw_model = content_w * 0.18
-        cw_rest  = (content_w - cw_model) / max(n_cols - 1, 1)
+        # 컬럼별 고정 너비 (pt) — 헤더 2줄 방지
+        _HDR_WIDTHS = {
+            "모델":    70,
+            "지식총점": 45,
+            "정확도":  40,
+            "허위정보": 42,
+            "전문성":  45,
+            "Tool호출": 35,
+            "슬롯":    30,
+            "거절":    30,
+            "완료":    30,
+            "USD":    42,
+            "KRW":    38,
+        }
+        _raw_widths = [_HDR_WIDTHS.get(h, 35) for h in col_hdrs]
+        _raw_total  = sum(_raw_widths)
+        col_widths  = [w * content_w / _raw_total for w in _raw_widths]
+        n_cols = len(col_hdrs)
 
         k_models    = [d for d in model_stats.values() if d.get("has_knowledge")]
-        best_total  = max((d["knowledge_total"] for d in k_models), default=None) if k_models else None
-        worst_total = min((d["knowledge_total"] for d in k_models), default=None) if len(k_models) > 1 else None
+        best_total  = max((d["knowledge_total"] or 0.0 for d in k_models), default=None) if k_models else None
+        worst_total = min((d["knowledge_total"] or 0.0 for d in k_models), default=None) if len(k_models) > 1 else None
         best_axis:  dict[str, float] = {}
         worst_axis: dict[str, float] = {}
         if has_k and k_models:
             for ak in _k_axis_keys:
-                vals = [d["knowledge_axes"].get(ak, 0) for d in k_models]
+                vals = [d["knowledge_axes"].get(ak) or 0.0 for d in k_models]
                 best_axis[ak] = max(vals)
                 if len(vals) > 1:
                     worst_axis[ak] = min(vals)
@@ -586,7 +607,7 @@ def _build_mckinsey_pdf(
             row = [Paragraph(MODEL_DISPLAY_NAMES.get(model, model), s_name)]
 
             if has_k:
-                kt = data["knowledge_total"]
+                kt = data["knowledge_total"] or 0.0
                 is_kt_best  = (kt == best_total)
                 is_kt_worst = (kt == worst_total) and worst_total is not None
                 s_kt = _stb(f"kt_{row_i}", fontSize=7.5, leading=10,
@@ -597,7 +618,7 @@ def _build_mckinsey_pdf(
                     _cell_bg[(row_i, 1)] = CELL_BEST
 
                 for ak_i, ak in enumerate(_k_axis_keys, start=2):
-                    v = data["knowledge_axes"].get(ak, 0)
+                    v = data["knowledge_axes"].get(ak) or 0.0
                     is_v_best   = (v == best_axis.get(ak))
                     is_v_danger = (ak == "hallucination" and v <= 2.0)
                     s_v = _stb(f"av_{row_i}_{ak}", fontSize=7.5, leading=10,
@@ -636,6 +657,7 @@ def _build_mckinsey_pdf(
             ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
             ("FONTNAME",      (0, 0), (-1, -1), _FN),
             ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
+            ("FONTSIZE",      (0, 0), (-1, 0),  6.5),   # 헤더 행 -1pt
         ]
         for i, (model, _) in enumerate(model_stats.items(), start=1):
             if model == best_model:
@@ -648,7 +670,7 @@ def _build_mckinsey_pdf(
 
         model_tbl = Table(
             tbl_data,
-            colWidths=[cw_model] + [cw_rest] * (n_cols - 1),
+            colWidths=col_widths,
             rowHeights=row_h,
         )
         model_tbl.setStyle(TableStyle(model_style))
@@ -657,13 +679,13 @@ def _build_mckinsey_pdf(
             "★ 최고값 (앰버 배경)   ▽ 허위정보 점수 ≤ 2 (빨강 배경)",
             s_legend,
         )
-        elems += [model_tbl, Spacer(1, 2), legend_para]
+        elems += [Spacer(1, 4), model_tbl, Spacer(1, 2), legend_para]
         if cost_dict:
             elems.append(Paragraph(
                 f"※ 환율 기준: USD 1 = KRW {USD_TO_KRW:,} ({date_str_kst} 기준)",
                 s_footnote,
             ))
-        elems.append(Spacer(1, 4))
+        elems.append(Spacer(1, 2))
     except Exception as e:
         st.warning(f"PDF 모델 비교 표 생성 오류: {e}")
 
@@ -672,8 +694,8 @@ def _build_mckinsey_pdf(
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     try:
         elems += [
-            Spacer(1, 4),
-            HRFlowable(width="100%", thickness=0.5, color=BORDER_GRAY, spaceAfter=3),
+            Spacer(1, 2),
+            HRFlowable(width="100%", thickness=0.5, color=BORDER_GRAY, spaceAfter=2),
             Paragraph(
                 "본 리포트는 BenchMate AI 자동 분석 결과입니다. "
                 "최종 의사결정은 담당자가 내려주세요.",
@@ -754,7 +776,7 @@ def _render_score_table(model_stats: dict[str, dict]) -> None:
 # ── 차트 섹션 ──────────────────────────────────────────────────────────────────
 
 def _render_charts(model_stats: dict[str, dict], eval_result: dict) -> None:
-    st.subheader("시각화")
+    st.subheader("성과 분석 차트")
     eval_mode = st.session_state.get("eval_mode", "")
     has_k = has_knowledge_data(model_stats)
     has_a = has_agent_data(model_stats, eval_result, eval_mode)
@@ -772,7 +794,9 @@ def _render_charts(model_stats: dict[str, dict], eval_result: dict) -> None:
                 st.plotly_chart(radar_fig, use_container_width=True)
     with col_r:
         if has_a:
-            agent_fig = build_agent_bar_fig(model_stats)
+            agent_fig = build_agent_bar_fig(
+                model_stats, eval_result.get("summary_table")
+            )
             if agent_fig:
                 st.plotly_chart(agent_fig, use_container_width=True)
 

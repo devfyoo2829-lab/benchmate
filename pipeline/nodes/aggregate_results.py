@@ -311,9 +311,31 @@ def aggregate_results(state: EvalState) -> dict:
         pricing = {"default": {"input_per_1k": 0.001, "output_per_1k": 0.003}}
     estimated_cost = _compute_estimated_cost(model_responses, pricing)
 
-    return {
+    print("[aggregate_results] summary_table 집계 결과:")
+    for _m, _sec in summary_table.items():
+        _k = _sec.get("knowledge", {})
+        _a = _sec.get("agent", {})
+        print(
+            f"  {_m}: K_total={_k.get('total')}, K_qcount={_k.get('question_count')}, "
+            f"A_call={_a.get('call_score')}, A_slot={_a.get('slot_score')}, "
+            f"A_scount={_a.get('scenario_count')}"
+        )
+
+    result: dict = {
         "knowledge_scores_final": knowledge_scores_final,
         "summary_table": summary_table,
         "judge_reliability": judge_reliability,
         "estimated_cost": estimated_cost,
     }
+
+    # integrated 모드 단계 전환:
+    #   "knowledge" → "agent" : Knowledge 집계 완료, Agent 경로 시작 신호
+    #   "agent"     → "done"  : Agent 집계 완료, generate_report로 진행
+    phase = state.get("_integrated_phase")
+    if state.get("eval_mode") == "integrated":
+        if phase == "knowledge":
+            result["_integrated_phase"] = "agent"
+        elif phase == "agent":
+            result["_integrated_phase"] = "done"
+
+    return result

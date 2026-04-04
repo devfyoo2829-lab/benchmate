@@ -18,7 +18,7 @@ def route_mode(state: EvalState) -> dict:
     if state["eval_mode"] == "integrated":
         # _integrated_phase가 아직 설정되지 않은 경우에만 초기화
         # (integrated 모드 재진입 시 기존 값 보존)
-        if not state.get("_integrated_phase"):  # type: ignore[call-overload]
+        if not state.get("_integrated_phase"):
             return {"_integrated_phase": "knowledge"}
 
     return {}

@@ -36,13 +36,25 @@ def decide_branch(state: EvalState) -> str:
     elif mode == "agent":
         return "agent"
     elif mode == "integrated":
-        phase = state.get("_integrated_phase", "knowledge")  # type: ignore[call-overload]
+        phase = state.get("_integrated_phase", "knowledge")
         if phase == "agent":
             return "agent"
         return "integrated_k"  # knowledge 단계 먼저
     else:
         # 알 수 없는 모드 — knowledge로 폴백 (설계서 §7 오류 처리 정책)
         return "knowledge"
+
+
+def decide_after_aggregate(state: EvalState) -> str:
+    """aggregate_results 이후 분기 결정.
+
+    integrated 모드에서 Knowledge 집계가 끝나면 Agent 경로로 진입한다.
+    aggregate_results 노드가 _integrated_phase를 "agent"로 설정했을 때만 분기.
+    그 외(knowledge/agent 단일 모드, integrated 완료)는 generate_report로 진행.
+    """
+    if state.get("_integrated_phase") == "agent":
+        return "agent_phase"
+    return "done"
 
 
 def decide_retry(state: EvalState) -> str:
@@ -52,7 +64,7 @@ def decide_retry(state: EvalState) -> str:
     그 외에는 flag_human_review로 진행.
     """
     if state["retry_count"] > 0:
-        failed_branch = state.get("last_failed_branch")  # type: ignore[call-overload]
+        failed_branch = state.get("last_failed_branch")
         if failed_branch == "knowledge":
             return "retry_knowledge"
         elif failed_branch == "agent":
@@ -116,7 +128,19 @@ def build_graph() -> StateGraph:
 
     # 하류 공통 경로
     graph.add_edge("flag_human_review", "aggregate_results")
-    graph.add_edge("aggregate_results", "generate_report")
+
+    # aggregate_results 이후 분기:
+    #   integrated 모드 Knowledge 완료 시 → generate_tool_calls (Agent 경로 진입)
+    #   그 외 → generate_report
+    graph.add_conditional_edges(
+        "aggregate_results",
+        decide_after_aggregate,
+        {
+            "agent_phase": "generate_tool_calls",
+            "done":        "generate_report",
+        },
+    )
+
     graph.add_edge("generate_report", END)
 
     return graph.compile()

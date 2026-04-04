@@ -90,55 +90,101 @@ def _build_card_html(domain: dict, selected_key: str | None) -> str:
     """
 
 
+_TOOL_EXAMPLE = {
+    "name": "customer_credit_check",
+    "description": "고객 ID를 입력받아 신용등급과 대출 가능 여부를 조회합니다.",
+    "inputs": "고객ID(필수), 조회일자(선택)",
+    "outputs": "신용등급(1~10등급), 대출가능여부, 한도금액",
+}
+
+
 def _render_custom_tool_form() -> None:
-    custom_tools: list[dict] = st.session_state.setdefault("available_tools", [])
+    # 폼 draft 상태 초기화
+    st.session_state.setdefault("tool_name_draft", "")
+    st.session_state.setdefault("tool_desc_draft", "")
+    st.session_state.setdefault("tool_inputs_draft", "")
+    st.session_state.setdefault("tool_outputs_draft", "")
 
     with st.expander("+ 사내 기능 직접 추가", expanded=False):
-        with st.form("custom_tool_form", clear_on_submit=True):
-            name = st.text_input(
-                "기능명 *",
-                placeholder="예: 고객 신용등급 조회",
-            )
-            description = st.text_input(
-                "설명",
-                placeholder="예: 고객 ID를 입력하면 신용등급과 연체 이력을 반환합니다.",
-            )
-            inputs = st.text_area(
-                "입력값",
-                placeholder="예: 고객ID(필수), 조회일자(선택)",
-                height=80,
-            )
-            outputs = st.text_area(
-                "출력값",
-                placeholder="예: 신용등급, 연체이력",
-                height=80,
-            )
-            submitted = st.form_submit_button("추가", type="primary", use_container_width=True)
+        # 예시 채우기 버튼
+        _, col_btn = st.columns([5, 1])
+        with col_btn:
+            if st.button("예시 채우기 →", key="btn_tool_example"):
+                st.session_state["tool_name_draft"] = _TOOL_EXAMPLE["name"]
+                st.session_state["tool_desc_draft"] = _TOOL_EXAMPLE["description"]
+                st.session_state["tool_inputs_draft"] = _TOOL_EXAMPLE["inputs"]
+                st.session_state["tool_outputs_draft"] = _TOOL_EXAMPLE["outputs"]
+                st.rerun()
 
-        if submitted:
+        name = st.text_input(
+            "기능명 *",
+            value=st.session_state["tool_name_draft"],
+            placeholder="예: 고객 신용등급 조회",
+        )
+        st.session_state["tool_name_draft"] = name
+
+        description = st.text_input(
+            "설명",
+            value=st.session_state["tool_desc_draft"],
+            placeholder="예: 고객 ID를 입력하면 신용등급과 연체 이력을 반환합니다.",
+        )
+        st.session_state["tool_desc_draft"] = description
+
+        inputs = st.text_area(
+            "입력값",
+            value=st.session_state["tool_inputs_draft"],
+            placeholder="예: 고객ID(필수), 조회일자(선택)",
+            height=80,
+        )
+        st.session_state["tool_inputs_draft"] = inputs
+
+        outputs = st.text_area(
+            "출력값",
+            value=st.session_state["tool_outputs_draft"],
+            placeholder="예: 신용등급, 연체이력",
+            height=80,
+        )
+        st.session_state["tool_outputs_draft"] = outputs
+
+        if st.button("추가", type="primary", use_container_width=True, key="add_custom_tool"):
             if not name.strip():
                 st.error("기능명을 입력하세요.")
             else:
-                custom_tools.append(
-                    {
-                        "name": name.strip(),
-                        "description": description.strip(),
-                        "inputs": inputs.strip(),
-                        "outputs": outputs.strip(),
-                    }
-                )
-                st.session_state["available_tools"] = custom_tools
+                new_tool = {
+                    "name": name.strip(),
+                    "description": description.strip(),
+                    "parameters": [
+                        {
+                            "name": "input",
+                            "type": "string",
+                            "required": True,
+                            "description": inputs.strip(),
+                        }
+                    ],
+                    "mock_return": {"result": outputs.strip() or "사용자 정의 Tool 결과"},
+                }
+                tools = st.session_state.get("available_tools", [])
+                tools.append(new_tool)
+                st.session_state["available_tools"] = tools
+                # draft 초기화
+                st.session_state["tool_name_draft"] = ""
+                st.session_state["tool_desc_draft"] = ""
+                st.session_state["tool_inputs_draft"] = ""
+                st.session_state["tool_outputs_draft"] = ""
                 st.success(f"'{name.strip()}' 기능이 추가됐습니다.")
                 st.rerun()
 
+    custom_tools: list[dict] = st.session_state.get("available_tools", [])
     if custom_tools:
         st.markdown(f"**직접 추가한 기능 ({len(custom_tools)}개)**")
         for t in custom_tools:
-            with st.expander(f"**{t['name']}**  —  {t['description']}", expanded=False):
-                if t["inputs"]:
-                    st.markdown(f"**입력값:** {t['inputs']}")
-                if t["outputs"]:
-                    st.markdown(f"**출력값:** {t['outputs']}")
+            with st.expander(f"**{t['name']}**  —  {t.get('description', '')}", expanded=False):
+                params = t.get("parameters", [])
+                if params and params[0].get("description"):
+                    st.markdown(f"**입력값:** {params[0]['description']}")
+                result = t.get("mock_return", {}).get("result", "")
+                if result and result != "사용자 정의 Tool 결과":
+                    st.markdown(f"**출력값:** {result}")
         if st.button("추가 기능 전체 삭제", key="clear_custom_tools"):
             st.session_state["available_tools"] = []
             st.rerun()

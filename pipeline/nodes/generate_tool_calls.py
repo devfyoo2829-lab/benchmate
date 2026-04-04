@@ -71,6 +71,16 @@ def _try_parse_json(text: str) -> Optional[dict]:
             return None
 
 
+def _resolve_model_name(model_name: str) -> str:
+    """UI 모델 키 → 실제 API 모델명으로 변환."""
+    _MODEL_MAP: dict[str, str] = {
+        "solar-pro":     "solar-pro",
+        "gpt-4o":        "gpt-4o",
+        "claude-sonnet": "claude-sonnet-4-5",
+    }
+    return _MODEL_MAP.get(model_name, model_name)
+
+
 def _client_type(model_name: str) -> str:
     name = model_name.lower()
     if "solar" in name or "upstage" in name:
@@ -187,12 +197,18 @@ async def _call_model(
     scenario: ScenarioItem,
     all_tools: List[ToolDefinition],
 ) -> ModelResponse:
+    api_model_name = _resolve_model_name(model_name)
     system_prompt = _build_system_prompt(scenario, all_tools)
     user_message = _get_user_message(scenario)
-    ctype = _client_type(model_name)
+    ctype = _client_type(api_model_name)
+    print(
+        f"[generate_tool_calls] model_key={model_name!r} "
+        f"→ api_model={api_model_name!r} / client={ctype} "
+        f"/ scenario_id={scenario['id']!r}"
+    )
     start = time.time()
     try:
-        result = await _call_with_retry(model_name, system_prompt, user_message, ctype)
+        result = await _call_with_retry(api_model_name, system_prompt, user_message, ctype)
         raw_text = result["text"]
         parsed = _try_parse_json(raw_text)
         return ModelResponse(

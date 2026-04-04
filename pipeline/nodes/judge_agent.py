@@ -127,14 +127,29 @@ async def _judge_single(
         reason = str(parsed.get("reason", ""))
 
         if eval_type == "slot":
-            updated["slot_score"] = judge_score
+            # slot/relevance는 0 또는 1 (Judge 원점수 1~5를 임계값 3 기준 이진화)
+            updated["slot_score"] = 1 if judge_score >= 3 else 0
         elif eval_type == "relevance":
-            updated["relevance_score"] = judge_score
+            updated["relevance_score"] = 1 if judge_score >= 3 else 0
         elif eval_type == "completion":
-            updated["completion_score"] = judge_score
+            # completion은 1~3 척도 (범위 벗어나면 클램프)
+            updated["completion_score"] = max(1, min(3, judge_score))
 
         updated["reason"] = reason
-    except Exception:
+        print(
+            f"[judge_agent] scenario={score['scenario_id']!r} "
+            f"model={score['model_name']!r} "
+            f"eval_type={eval_type!r} "
+            f"slot_score={updated.get('slot_score')!r} "
+            f"relevance_score={updated.get('relevance_score')!r} "
+            f"completion_score={updated.get('completion_score')!r}"
+        )
+    except Exception as e:
+        print(
+            f"[judge_agent] 파싱 실패 scenario={score['scenario_id']!r} "
+            f"model={score['model_name']!r} eval_type={eval_type!r} "
+            f"error={e!r} raw={raw[:80]!r}"
+        )
         updated["_parse_failed"] = True
         updated["_raw_output"] = raw
 

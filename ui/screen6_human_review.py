@@ -90,12 +90,37 @@ def _update_reliability(updated_queue: list[dict]) -> None:
 
 # ── 모델 응답 / 루브릭 조회 ──────────────────────────────────────────────────
 
+_API_ERROR_PATTERNS = ("Error code: 404", "not_found_error")
+
+
+def _is_api_error(text: str) -> bool:
+    return any(p in text for p in _API_ERROR_PATTERNS)
+
+
 def _find_response_text(eval_result: dict, item_id: str, model_name: str) -> str:
-    """eval_result["model_responses"]에서 item_id + model_name에 맞는 response_text를 반환."""
+    """eval_result["model_responses"]에서 item_id + model_name에 맞는 response_text를 반환.
+    raw_output에 API 오류가 포함된 경우 빈 문자열을 반환한다."""
     for record in (eval_result or {}).get("model_responses") or []:
         rid = record.get("question_id") or record.get("scenario_id") or record.get("item_id", "")
         if rid == item_id and record.get("model_name") == model_name:
-            return record.get("response_text") or record.get("response") or ""
+            raw = record.get("raw_output") or ""
+            if _is_api_error(raw):
+                return ""
+            return (
+                record.get("response_text")
+                or raw
+                or record.get("response")
+                or ""
+            )
+    return ""
+
+
+def _find_raw_output(eval_result: dict, item_id: str, model_name: str) -> str:
+    """raw_output 원문 반환 (API 오류 감지용)."""
+    for record in (eval_result or {}).get("model_responses") or []:
+        rid = record.get("question_id") or record.get("scenario_id") or record.get("item_id", "")
+        if rid == item_id and record.get("model_name") == model_name:
+            return record.get("raw_output") or ""
     return ""
 
 
@@ -229,19 +254,34 @@ def _render_group(
                 f"검토 사유: {_reason_label(review_reason)}"
             )
 
-            # 모델 응답 표시
+            # 모델 응답 표시 (Knowledge: response_text, Agent: raw_output 우선)
             response_text = _find_response_text(eval_result, item_id, model_name)
-            if response_text:
+            raw_output    = _find_raw_output(eval_result, item_id, model_name)
+
+            if not response_text and _is_api_error(raw_output):
+                st.warning(
+                    "⚠️ 이 모델은 API 오류로 응답을 가져오지 못했습니다.\n\n"
+                    "(원인: 모델명 오류 또는 API 크레딧 부족)"
+                )
+            elif response_text or item_type == "agent":
                 st.text_area(
-                    "모델 응답",
-                    value=response_text,
+                    "모델이 실제로 답변한 내용:",
+                    value=response_text or "모델 응답을 찾을 수 없습니다.",
                     height=300,
                     disabled=True,
                     key=f"s6_resp_{group_idx}_{model_name}",
                 )
 
             if is_reviewed:
-                st.success("검토 완료")
+                col_status, col_edit = st.columns([3, 1])
+                with col_status:
+                    st.success("검토 완료")
+                with col_edit:
+                    if st.button("수정하기", key=f"s6_edit_{group_idx}_{model_name}"):
+                        item["is_reviewed"] = False
+                        _update_reliability(queue)
+                        st.rerun()
+
                 human_score = item.get("human_score") or {}
                 if item_type == "knowledge":
                     score_cols = st.columns(len(_KNOWLEDGE_FIELDS))

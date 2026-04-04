@@ -10,10 +10,10 @@ from ui.charts import (
     extract_model_stats,
     has_knowledge_data,
     has_agent_data,
-    build_scatter_fig,
+    build_positioning_matrix_fig,
     build_knowledge_bar_fig,
     build_radar_fig,
-    build_agent_bar_fig,
+    build_agent_table_fig,
 )
 
 
@@ -93,8 +93,9 @@ def render() -> None:
 
     # ── 상단 주요 차트: 데이터 조합에 따라 결정 ──────────────────────────────
     if has_k and has_a:
-        st.subheader("Knowledge vs Agent 비교")
-        st.plotly_chart(build_scatter_fig(model_stats), use_container_width=True)
+        matrix_fig = build_positioning_matrix_fig(model_stats, eval_result)
+        st.plotly_chart(matrix_fig, use_container_width=True)
+        st.caption("우상단에 위치할수록 지식과 업무 수행 능력이 모두 우수합니다.")
     elif has_k:
         st.subheader("도메인 지식 평가 결과 (25점 만점)")
         st.plotly_chart(build_knowledge_bar_fig(model_stats), use_container_width=True)
@@ -117,10 +118,15 @@ def render() -> None:
             else:
                 st.info("Knowledge 세부 항목 데이터가 없습니다.")
         with col_right:
-            st.subheader("Agent 항목별 비교")
-            agent_fig = build_agent_bar_fig(model_stats)
-            if agent_fig:
-                st.plotly_chart(agent_fig, use_container_width=True)
+            st.subheader("업무 자동화 능력 평가 결과")
+            agent_tbl_fig = build_agent_table_fig(
+                model_stats, eval_result.get("summary_table")
+            )
+            if agent_tbl_fig:
+                st.plotly_chart(agent_tbl_fig, use_container_width=True)
+                st.caption(
+                    "● 성공  ● 실패  — 시나리오가 없는 항목은 표시되지 않습니다"
+                )
             else:
                 st.info("Agent 평가 데이터가 없습니다.")
     else:

@@ -24,12 +24,14 @@ DOMAIN_NAMES: dict[str, str] = {
     "manufacturing": "제조",
 }
 
-# UI 모델 키 → 실제 API 모델명 매핑
-_MODEL_API_NAME: dict[str, str] = {
-    "solar-pro":     "solar-pro",
-    "gpt-4o":        "gpt-4o",
-    "claude-sonnet": "claude-sonnet-4-5",
-}
+def _resolve_model_name(model_name: str) -> str:
+    """UI 모델 키 → 실제 API 모델명으로 변환."""
+    _MODEL_MAP: dict[str, str] = {
+        "solar-pro":     "solar-pro",
+        "gpt-4o":        "gpt-4o",
+        "claude-sonnet": "claude-sonnet-4-5",
+    }
+    return _MODEL_MAP.get(model_name, model_name)
 
 
 def _client_type(model_name: str) -> str:
@@ -128,13 +130,18 @@ async def _call_with_retry(
 
 
 async def _call_model(model_name: str, question: QuestionItem) -> ModelResponse:
-    api_model_name = _MODEL_API_NAME.get(model_name, model_name)
+    api_model_name = _resolve_model_name(model_name)
     domain_kr = DOMAIN_NAMES.get(question["domain"], question["domain"])
     system_prompt = (
         f"당신은 {domain_kr} 도메인 전문가입니다. "
         "질문에 정확하고 자연스러운 한국어로 답변하세요."
     )
     ctype = _client_type(api_model_name)
+    print(
+        f"[generate_responses] model_key={model_name!r} "
+        f"→ api_model={api_model_name!r} / client={ctype} "
+        f"/ question_id={question['id']!r}"
+    )
     start = time.time()
     try:
         result = await _call_with_retry(api_model_name, system_prompt, question["question"], ctype)
